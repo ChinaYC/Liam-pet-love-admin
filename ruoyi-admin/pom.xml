@@ -50,6 +50,33 @@
             <artifactId>ruoyi-common-doc</artifactId>
         </dependency>
 
+        <!-- 核心工具，提供 R 等基础模型 -->
+        <dependency>
+            <groupId>org.dromara</groupId>
+            <artifactId>ruoyi-common-core</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.dromara</groupId>
+            <artifactId>ruoyi-common-json</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.dromara</groupId>
+            <artifactId>ruoyi-common-encrypt</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.dromara</groupId>
+            <artifactId>ruoyi-common-satoken</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.dromara</groupId>
+            <artifactId>ruoyi-common-sse</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.dromara</groupId>
+            <artifactId>ruoyi-common-tenant</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>org.dromara</groupId>
             <artifactId>ruoyi-common-social</artifactId>
@@ -68,6 +95,13 @@
         <dependency>
             <groupId>org.dromara</groupId>
             <artifactId>ruoyi-system</artifactId>
+        </dependency>
+
+        <!-- Pet Love 模块 -->
+        <dependency>
+            <groupId>org.dromara</groupId>
+            <artifactId>ruoyi-pet-love</artifactId>
+            <version>${revision}</version>
         </dependency>
 
         <dependency>
