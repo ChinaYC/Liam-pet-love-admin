@@ -1,15 +1,14 @@
 package org.dromara.common.mybatis.handler;
 
-import cn.hutool.core.annotation.AnnotationUtil;
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.ObjectUtil;
+import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.sf.jsqlparser.JSQLParserException;
 import net.sf.jsqlparser.expression.Expression;
 import net.sf.jsqlparser.expression.operators.conditional.AndExpression;
 import net.sf.jsqlparser.expression.operators.relational.ParenthesedExpressionList;
 import net.sf.jsqlparser.parser.CCJSqlParserUtil;
-import org.apache.ibatis.io.Resources;
 import org.dromara.common.core.domain.dto.RoleDTO;
 import org.dromara.common.core.domain.model.LoginUser;
 import org.dromara.common.core.exception.ServiceException;
@@ -21,23 +20,13 @@ import org.dromara.common.mybatis.annotation.DataPermission;
 import org.dromara.common.mybatis.enums.DataScopeType;
 import org.dromara.common.mybatis.helper.DataPermissionHelper;
 import org.dromara.common.satoken.utils.LoginHelper;
-import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.expression.BeanFactoryResolver;
-import org.springframework.core.io.Resource;
-import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
-import org.springframework.core.io.support.ResourcePatternResolver;
-import org.springframework.core.type.ClassMetadata;
-import org.springframework.core.type.classreading.CachingMetadataReaderFactory;
-import org.springframework.expression.BeanResolver;
-import org.springframework.expression.ExpressionParser;
-import org.springframework.expression.ParserContext;
+import org.springframework.expression.*;
 import org.springframework.expression.common.TemplateParserContext;
 import org.springframework.expression.spel.standard.SpelExpressionParser;
 import org.springframework.expression.spel.support.StandardEvaluationContext;
-import org.springframework.util.ClassUtils;
 
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 
 /**
@@ -50,11 +39,6 @@ import java.util.function.Function;
 public class PlusDataPermissionHandler {
 
     /**
-     * 类名称与注解的映射关系缓存(由于aop无法拦截mybatis接口类上的注解 只能通过启动预扫描的方式进行)
-     */
-    private final Map<String, DataPermission> dataPermissionCacheMap = new ConcurrentHashMap<>();
-
-    /**
      * spel 解析器
      */
     private final ExpressionParser parser = new SpelExpressionParser();
@@ -65,26 +49,16 @@ public class PlusDataPermissionHandler {
     private final BeanResolver beanResolver = new BeanFactoryResolver(SpringUtils.getBeanFactory());
 
     /**
-     * 构造方法，扫描指定包下的 Mapper 类并初始化缓存
-     *
-     * @param mapperPackage Mapper 类所在的包路径
-     */
-    public PlusDataPermissionHandler(String mapperPackage) {
-        scanMapperClasses(mapperPackage);
-    }
-
-    /**
      * 获取数据过滤条件的 SQL 片段
      *
      * @param where             原始的查询条件表达式
-     * @param mappedStatementId Mapper 方法的 ID
      * @param isSelect          是否为查询语句
      * @return 数据过滤条件的 SQL 片段
      */
-    public Expression getSqlSegment(Expression where, String mappedStatementId, boolean isSelect) {
+    public Expression getSqlSegment(Expression where, boolean isSelect) {
         try {
             // 获取数据权限配置
-            DataPermission dataPermission = getDataPermission(mappedStatementId);
+            DataPermission dataPermission = getDataPermission();
             // 获取当前登录用户信息
             LoginUser currentUser = DataPermissionHelper.getVariable("user");
             if (ObjectUtil.isNull(currentUser)) {
@@ -130,10 +104,33 @@ public class PlusDataPermissionHandler {
             joinStr = " " + dataPermission.joinStr() + " ";
         }
         LoginUser user = DataPermissionHelper.getVariable("user");
-        StandardEvaluationContext context = new StandardEvaluationContext();
+        Object defaultValue = "-1";
+        NullSafeStandardEvaluationContext context = new NullSafeStandardEvaluationContext(defaultValue);
+        context.addPropertyAccessor(new NullSafePropertyAccessor(context.getPropertyAccessors().get(0), defaultValue));
         context.setBeanResolver(beanResolver);
         DataPermissionHelper.getContext().forEach(context::setVariable);
         Set<String> conditions = new HashSet<>();
+        // 优先设置变量
+        List<String> keys = new ArrayList<>();
+        Map<DataColumn, Boolean> ignoreMap = new HashMap<>();
+        for (DataColumn dataColumn : dataPermission.value()) {
+            if (dataColumn.key().length != dataColumn.value().length) {
+                throw new ServiceException("角色数据范围异常 => key与value长度不匹配");
+            }
+            // 包含权限标识符 这直接跳过
+            if (StringUtils.isNotBlank(dataColumn.permission()) &&
+                CollUtil.contains(user.getMenuPermission(), dataColumn.permission())
+            ) {
+                ignoreMap.put(dataColumn, Boolean.TRUE);
+                continue;
+            }
+            // 设置注解变量 key 为表达式变量 value 为变量值
+            for (int i = 0; i < dataColumn.key().length; i++) {
+                context.setVariable(dataColumn.key()[i], dataColumn.value()[i]);
+            }
+            keys.addAll(Arrays.stream(dataColumn.key()).map(key -> "#" + key).toList());
+        }
+
         for (RoleDTO role : user.getRoles()) {
             user.setRoleId(role.getRoleId());
             // 获取角色权限泛型
@@ -143,35 +140,25 @@ public class PlusDataPermissionHandler {
             }
             // 全部数据权限直接返回
             if (type == DataScopeType.ALL) {
-                return "";
+                return StringUtils.EMPTY;
             }
             boolean isSuccess = false;
-            List<String> keys = new ArrayList<>();
             for (DataColumn dataColumn : dataPermission.value()) {
-                if (dataColumn.key().length != dataColumn.value().length) {
-                    throw new ServiceException("角色数据范围异常 => key与value长度不匹配");
-                }
-                // 设置注解变量 key 为表达式变量 value 为变量值
-                for (int i = 0; i < dataColumn.key().length; i++) {
-                    context.setVariable(dataColumn.key()[i], dataColumn.value()[i]);
-                }
-                keys.addAll(Arrays.stream(dataColumn.key()).map(key -> "#" + key).toList());
-            }
-            for (DataColumn dataColumn : dataPermission.value()) {
-                // 不包含 key 变量 则不处理
-                if (!StringUtils.containsAny(type.getSqlTemplate(), keys.toArray(String[]::new))) {
-                    continue;
-                }
                 // 包含权限标识符 这直接跳过
-                if (StringUtils.isNotBlank(dataColumn.permission()) &&
-                    CollUtil.contains(user.getMenuPermission(), dataColumn.permission())
-                ) {
+                if (ignoreMap.containsKey(dataColumn)) {
                     // 修复多角色与权限标识符共用问题 https://gitee.com/dromara/RuoYi-Vue-Plus/issues/IB4CS4
                     conditions.add(joinStr + " 1 = 1 ");
                     isSuccess = true;
                     continue;
                 }
-
+                // 不包含 key 变量 则不处理
+                if (!StringUtils.containsAny(type.getSqlTemplate(), keys.toArray(String[]::new))) {
+                    continue;
+                }
+                // 当前注解不满足模板 不处理
+                if (!StringUtils.containsAny(type.getSqlTemplate(), dataColumn.key())) {
+                    continue;
+                }
                 // 忽略数据权限 防止spel表达式内有其他sql查询导致死循环调用
                 String sql = DataPermissionHelper.ignore(() ->
                     parser.parseExpression(type.getSqlTemplate(), parserContext).getValue(context, String.class)
@@ -190,71 +177,85 @@ public class PlusDataPermissionHandler {
             String sql = StreamUtils.join(conditions, Function.identity(), "");
             return sql.substring(joinStr.length());
         }
-        return "";
-    }
-
-    /**
-     * 扫描指定包下的 Mapper 类，并查找其中带有特定注解的方法或类
-     *
-     * @param mapperPackage Mapper 类所在的包路径
-     */
-    private void scanMapperClasses(String mapperPackage) {
-        // 创建资源解析器和元数据读取工厂
-        PathMatchingResourcePatternResolver resolver = new PathMatchingResourcePatternResolver();
-        CachingMetadataReaderFactory factory = new CachingMetadataReaderFactory();
-        // 将 Mapper 包路径按分隔符拆分为数组
-        String[] packagePatternArray = StringUtils.splitPreserveAllTokens(mapperPackage, ConfigurableApplicationContext.CONFIG_LOCATION_DELIMITERS);
-        String classpath = ResourcePatternResolver.CLASSPATH_ALL_URL_PREFIX;
-        try {
-            for (String packagePattern : packagePatternArray) {
-                // 将包路径转换为资源路径
-                String path = ClassUtils.convertClassNameToResourcePath(packagePattern);
-                // 获取指定路径下的所有 .class 文件资源
-                Resource[] resources = resolver.getResources(classpath + path + "/*.class");
-                for (Resource resource : resources) {
-                    // 获取资源的类元数据
-                    ClassMetadata classMetadata = factory.getMetadataReader(resource).getClassMetadata();
-                    // 获取资源对应的类对象
-                    Class<?> clazz = Resources.classForName(classMetadata.getClassName());
-                    // 查找类中的特定注解
-                    if (AnnotationUtil.hasAnnotation(clazz, DataPermission.class)) {
-                        DataPermission dataPermission = AnnotationUtil.getAnnotation(clazz, DataPermission.class);
-                        dataPermissionCacheMap.put(clazz.getName(), dataPermission);
-                    }
-                }
-            }
-        } catch (Exception e) {
-            log.error("初始化数据安全缓存时出错:{}", e.getMessage());
-        }
+        return StringUtils.EMPTY;
     }
 
     /**
      * 根据映射语句 ID 或类名获取对应的 DataPermission 注解对象
      *
-     * @param mapperId 映射语句 ID
      * @return DataPermission 注解对象，如果不存在则返回 null
      */
-    public DataPermission getDataPermission(String mapperId) {
-        // 检查上下文中是否包含映射语句 ID 对应的 DataPermission 注解对象
-        if (DataPermissionHelper.getPermission() != null) {
-            return DataPermissionHelper.getPermission();
-        }
-        // 如果缓存中不包含映射语句 ID 对应的 DataPermission 注解对象，则尝试使用类名作为键查找
-        String clazzName = mapperId.substring(0, mapperId.lastIndexOf("."));
-        if (dataPermissionCacheMap.containsKey(clazzName)) {
-            return dataPermissionCacheMap.get(clazzName);
-        }
-        return null;
+    public DataPermission getDataPermission() {
+        return DataPermissionHelper.getPermission();
     }
 
     /**
      * 检查给定的映射语句 ID 是否有效，即是否能够找到对应的 DataPermission 注解对象
      *
-     * @param mapperId 映射语句 ID
      * @return 如果找到对应的 DataPermission 注解对象，则返回 false；否则返回 true
      */
-    public boolean invalid(String mapperId) {
-        return getDataPermission(mapperId) == null;
+    public boolean invalid() {
+        return getDataPermission() == null;
+    }
+
+    /**
+     * 对所有null变量找不到的变量返回默认值
+     */
+    @AllArgsConstructor
+    private static class NullSafeStandardEvaluationContext extends StandardEvaluationContext {
+
+        private final Object defaultValue;
+
+        @Override
+        public Object lookupVariable(String name) {
+            Object obj = super.lookupVariable(name);
+            // 如果读取到的值是 null，则返回默认值
+            if (obj == null) {
+                return defaultValue;
+            }
+            return obj;
+        }
+
+    }
+
+    /**
+     * 对所有null变量找不到的变量返回默认值 委托模式 将不需要处理的方法委托给原处理器
+     */
+    @AllArgsConstructor
+    private static class NullSafePropertyAccessor implements PropertyAccessor {
+
+        private final PropertyAccessor delegate;
+        private final Object defaultValue;
+
+        @Override
+        public Class<?>[] getSpecificTargetClasses() {
+            return delegate.getSpecificTargetClasses();
+        }
+
+        @Override
+        public boolean canRead(EvaluationContext context, Object target, String name) throws AccessException {
+            return delegate.canRead(context, target, name);
+        }
+
+        @Override
+        public TypedValue read(EvaluationContext context, Object target, String name) throws AccessException {
+            TypedValue value = delegate.read(context, target, name);
+            // 如果读取到的值是 null，则返回默认值
+            if (value.getValue() == null) {
+                return new TypedValue(defaultValue);
+            }
+            return value;
+        }
+
+        @Override
+        public boolean canWrite(EvaluationContext context, Object target, String name) throws AccessException {
+            return delegate.canWrite(context, target, name);
+        }
+
+        @Override
+        public void write(EvaluationContext context, Object target, String name, Object newValue) throws AccessException {
+            delegate.write(context, target, name, newValue);
+        }
     }
 
 }

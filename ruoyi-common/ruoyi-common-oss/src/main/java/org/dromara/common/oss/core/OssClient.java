@@ -2,24 +2,23 @@ package org.dromara.common.oss.core;
 
 import cn.hutool.core.io.IoUtil;
 import cn.hutool.core.util.IdUtil;
+import lombok.extern.slf4j.Slf4j;
 import org.dromara.common.core.constant.Constants;
 import org.dromara.common.core.utils.DateUtils;
 import org.dromara.common.core.utils.StringUtils;
 import org.dromara.common.core.utils.file.FileUtils;
 import org.dromara.common.oss.constant.OssConstant;
 import org.dromara.common.oss.entity.UploadResult;
-import org.dromara.common.oss.enumd.AccessPolicyType;
+import org.dromara.common.oss.enums.AccessPolicyType;
 import org.dromara.common.oss.exception.OssException;
 import org.dromara.common.oss.properties.OssProperties;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
-import software.amazon.awssdk.core.ResponseInputStream;
-import software.amazon.awssdk.core.async.AsyncResponseTransformer;
-import software.amazon.awssdk.core.async.BlockingInputStreamAsyncRequestBody;
+import software.amazon.awssdk.core.async.*;
+import software.amazon.awssdk.http.nio.netty.NettyNioAsyncHttpClient;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3AsyncClient;
 import software.amazon.awssdk.services.s3.S3Configuration;
-import software.amazon.awssdk.services.s3.crt.S3CrtHttpConfiguration;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.transfer.s3.S3TransferManager;
@@ -29,9 +28,13 @@ import software.amazon.awssdk.transfer.s3.progress.LoggingTransferListener;
 import java.io.*;
 import java.net.URI;
 import java.net.URL;
+import java.nio.channels.Channels;
+import java.nio.channels.WritableByteChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.Optional;
+import java.util.function.Consumer;
 
 /**
  * S3 存储协议 所有兼容S3协议的云厂商均支持
@@ -39,6 +42,7 @@ import java.time.Duration;
  *
  * @author AprilWind
  */
+@Slf4j
 public class OssClient {
 
     /**
@@ -83,18 +87,14 @@ public class OssClient {
             // MinIO 使用 HTTPS 限制使用域名访问，站点填域名。需要启用路径样式访问
             boolean isStyle = !StringUtils.containsAny(properties.getEndpoint(), OssConstant.CLOUD_SERVICE);
 
-            // 创建AWS基于 CRT 的 S3 客户端
-            this.client = S3AsyncClient.crtBuilder()
+            // 创建AWS基于 Netty 的 S3 客户端
+            this.client = S3AsyncClient.builder()
                 .credentialsProvider(credentialsProvider)
                 .endpointOverride(URI.create(getEndpoint()))
                 .region(of())
-                .targetThroughputInGbps(20.0)
-                .minimumPartSizeInBytes(10 * 1025 * 1024L)
-                .checksumValidationEnabled(false)
                 .forcePathStyle(isStyle)
-                .httpConfiguration(S3CrtHttpConfiguration.builder()
-                    .connectionTimeout(Duration.ofSeconds(60)) // 设置连接超时
-                    .build())
+                .httpClient(NettyNioAsyncHttpClient.builder()
+                    .connectionTimeout(Duration.ofSeconds(60)).build())
                 .build();
 
             //AWS基于 CRT 的 S3 AsyncClient 实例用作 S3 传输管理器的底层客户端
@@ -180,12 +180,12 @@ public class OssClient {
             // 创建异步请求体（length如果为空会报错）
             BlockingInputStreamAsyncRequestBody body = BlockingInputStreamAsyncRequestBody.builder()
                 .contentLength(length)
-                .subscribeTimeout(Duration.ofSeconds(30))
+                .subscribeTimeout(Duration.ofSeconds(120))
                 .build();
 
             // 使用 transferManager 进行上传
             Upload upload = transferManager.upload(
-                x -> x.requestBody(body)
+                x -> x.requestBody(body).addTransferListener(LoggingTransferListener.create())
                     .putObjectRequest(
                         y -> y.bucket(properties.getBucketName())
                             .key(key)
@@ -239,27 +239,62 @@ public class OssClient {
      *
      * @param key 文件在 Amazon S3 中的对象键
      * @param out 输出流
-     * @return 输出流中写入的字节数（长度）
+     * @param consumer 自定义处理逻辑
      * @throws OssException 如果下载失败，抛出自定义异常
      */
-    public long download(String key, OutputStream out) {
+    public void download(String key, OutputStream out, Consumer<Long> consumer) {
+        try {
+            this.download(key, consumer).writeTo(out);
+        } catch (Exception e) {
+            throw new OssException("文件下载失败，错误信息:[" + e.getMessage() + "]");
+        }
+    }
+
+    /**
+     * 下载文件从 Amazon S3 到 输出流
+     *
+     * @param key 文件在 Amazon S3 中的对象键
+     * @param contentLengthConsumer 文件大小消费者函数
+     * @return 写出订阅器
+     * @throws OssException 如果下载失败，抛出自定义异常
+     */
+    public WriteOutSubscriber<OutputStream> download(String key, Consumer<Long> contentLengthConsumer) {
         try {
             // 构建下载请求
-            DownloadRequest<ResponseInputStream<GetObjectResponse>> downloadRequest = DownloadRequest.builder()
+            DownloadRequest<ResponsePublisher<GetObjectResponse>> publisherDownloadRequest = DownloadRequest.builder()
                 // 文件对象
                 .getObjectRequest(y -> y.bucket(properties.getBucketName())
                     .key(key)
                     .build())
                 .addTransferListener(LoggingTransferListener.create())
-                // 使用订阅转换器
-                .responseTransformer(AsyncResponseTransformer.toBlockingInputStream())
+                // 使用发布订阅转换器
+                .responseTransformer(AsyncResponseTransformer.toPublisher())
                 .build();
+
             // 使用 S3TransferManager 下载文件
-            Download<ResponseInputStream<GetObjectResponse>> responseFuture = transferManager.download(downloadRequest);
-            // 输出到流中
-            try (ResponseInputStream<GetObjectResponse> responseStream = responseFuture.completionFuture().join().result()) { // auto-closeable stream
-                return responseStream.transferTo(out); // 阻塞调用线程 blocks the calling thread
-            }
+            Download<ResponsePublisher<GetObjectResponse>> publisherDownload = transferManager.download(publisherDownloadRequest);
+            // 获取下载发布订阅转换器
+            ResponsePublisher<GetObjectResponse> publisher = publisherDownload.completionFuture().join().result();
+            // 执行文件大小消费者函数
+            Optional.ofNullable(contentLengthConsumer)
+                .ifPresent(lengthConsumer -> lengthConsumer.accept(publisher.response().contentLength()));
+
+            // 构建写出订阅器对象
+            return out -> {
+                // 创建可写入的字节通道
+                try(WritableByteChannel channel = Channels.newChannel(out)){
+                    // 订阅数据
+                    publisher.subscribe(byteBuffer -> {
+                        while (byteBuffer.hasRemaining()) {
+                            try {
+                                channel.write(byteBuffer);
+                            } catch (IOException e) {
+                                throw new RuntimeException(e);
+                            }
+                        }
+                    }).join();
+                }
+            };
         } catch (Exception e) {
             throw new OssException("文件下载失败，错误信息:[" + e.getMessage() + "]");
         }
@@ -284,13 +319,13 @@ public class OssClient {
     /**
      * 获取私有URL链接
      *
-     * @param objectKey 对象KEY
-     * @param second    授权时间
+     * @param objectKey   对象KEY
+     * @param expiredTime 链接授权到期时间
      */
-    public String getPrivateUrl(String objectKey, Integer second) {
+    public String getPrivateUrl(String objectKey, Duration expiredTime) {
         // 使用 AWS S3 预签名 URL 的生成器 获取对象的预签名 URL
         URL url = presigner.presignGetObject(
-                x -> x.signatureDuration(Duration.ofSeconds(second))
+                x -> x.signatureDuration(expiredTime)
                     .getObjectRequest(
                         y -> y.bucket(properties.getBucketName())
                             .key(objectKey)

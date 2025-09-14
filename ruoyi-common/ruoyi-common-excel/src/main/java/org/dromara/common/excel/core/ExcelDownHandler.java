@@ -1,16 +1,17 @@
 package org.dromara.common.excel.core;
 
 import cn.hutool.core.collection.CollUtil;
+import cn.hutool.core.convert.Convert;
 import cn.hutool.core.util.ArrayUtil;
 import cn.hutool.core.util.EnumUtil;
 import cn.hutool.core.util.ObjectUtil;
 import cn.hutool.core.util.StrUtil;
-import com.alibaba.excel.metadata.FieldCache;
-import com.alibaba.excel.metadata.FieldWrapper;
-import com.alibaba.excel.util.ClassUtils;
-import com.alibaba.excel.write.handler.SheetWriteHandler;
-import com.alibaba.excel.write.metadata.holder.WriteSheetHolder;
-import com.alibaba.excel.write.metadata.holder.WriteWorkbookHolder;
+import cn.idev.excel.metadata.FieldCache;
+import cn.idev.excel.metadata.FieldWrapper;
+import cn.idev.excel.util.ClassUtils;
+import cn.idev.excel.write.handler.SheetWriteHandler;
+import cn.idev.excel.write.metadata.holder.WriteSheetHolder;
+import cn.idev.excel.write.metadata.holder.WriteWorkbookHolder;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.ss.util.CellRangeAddressList;
@@ -103,7 +104,7 @@ public class ExcelDownHandler implements SheetWriteHandler {
                 if (StringUtils.isNotBlank(dictType)) {
                     // 如果传递了字典名，则依据字典建立下拉
                     Collection<String> values = Optional.ofNullable(dictService.getAllDictByDictType(dictType))
-                        .orElseThrow(() -> new ServiceException(String.format("字典 %s 不存在", dictType)))
+                        .orElseThrow(() -> new ServiceException("字典 {} 不存在", dictType))
                         .values();
                     options = new ArrayList<>(values);
                 } else if (StringUtils.isNotBlank(converterExp)) {
@@ -115,7 +116,7 @@ public class ExcelDownHandler implements SheetWriteHandler {
                 // 否则如果指定了@ExcelEnumFormat，则使用枚举的逻辑
                 ExcelEnumFormat format = field.getDeclaredAnnotation(ExcelEnumFormat.class);
                 List<Object> values = EnumUtil.getFieldValues(format.enumClass(), format.textField());
-                options = StreamUtils.toList(values, String::valueOf);
+                options = StreamUtils.toList(values, Convert::toStr);
             }
             if (ObjectUtil.isNotEmpty(options)) {
                 // 仅当下拉可选项不为空时执行
@@ -175,7 +176,7 @@ public class ExcelDownHandler implements SheetWriteHandler {
         List<String> firstOptions = options.getOptions();
         Map<String, List<String>> secoundOptionsMap = options.getNextOptions();
 
-        // 采用按行填充数据的方式，避免EasyExcel出现数据无法写入的问题
+        // 采用按行填充数据的方式，避免出现数据无法写入的问题
         // Attempting to write a row in the range that is already written to disk
 
         // 使用ArrayList记载数据，防止乱序
@@ -291,9 +292,11 @@ public class ExcelDownHandler implements SheetWriteHandler {
      * @param value    下拉选可选值
      */
     private void dropDownWithSheet(DataValidationHelper helper, Workbook workbook, Sheet sheet, Integer celIndex, List<String> value) {
+        //由于poi的写出相关问题，超过100个会被临时写进硬盘，导致后续内存合并会出Attempting to write a row[] in the range [] that is already written to disk
+        String tmpOptionsSheetName = OPTIONS_SHEET_NAME + "_" + currentOptionsColumnIndex;
         // 创建下拉数据表
-        Sheet simpleDataSheet = Optional.ofNullable(workbook.getSheet(WorkbookUtil.createSafeSheetName(OPTIONS_SHEET_NAME)))
-            .orElseGet(() -> workbook.createSheet(WorkbookUtil.createSafeSheetName(OPTIONS_SHEET_NAME)));
+        Sheet simpleDataSheet = Optional.ofNullable(workbook.getSheet(WorkbookUtil.createSafeSheetName(tmpOptionsSheetName)))
+            .orElseGet(() -> workbook.createSheet(WorkbookUtil.createSafeSheetName(tmpOptionsSheetName)));
         // 将下拉表隐藏
         workbook.setSheetHidden(workbook.getSheetIndex(simpleDataSheet), true);
         // 完善纵向的一级选项数据表
@@ -302,9 +305,9 @@ public class ExcelDownHandler implements SheetWriteHandler {
             // 获取每一选项行，如果没有则创建
             Row row = Optional.ofNullable(simpleDataSheet.getRow(i))
                 .orElseGet(() -> simpleDataSheet.createRow(finalI));
-            // 获取本级选项对应的选项列，如果没有则创建
-            Cell cell = Optional.ofNullable(row.getCell(currentOptionsColumnIndex))
-                .orElseGet(() -> row.createCell(currentOptionsColumnIndex));
+            // 获取本级选项对应的选项列，如果没有则创建。上述采用多个sheet,默认索引为1列
+            Cell cell = Optional.ofNullable(row.getCell(0))
+                .orElseGet(() -> row.createCell(0));
             // 设置值
             cell.setCellValue(value.get(i));
         }
@@ -312,13 +315,13 @@ public class ExcelDownHandler implements SheetWriteHandler {
         // 创建名称管理器
         Name name = workbook.createName();
         // 设置名称管理器的别名
-        String nameName = String.format("%s_%d", OPTIONS_SHEET_NAME, celIndex);
+        String nameName = String.format("%s_%d", tmpOptionsSheetName, celIndex);
         name.setNameName(nameName);
         // 以纵向第一列创建一级下拉拼接引用位置
         String function = String.format("%s!$%s$1:$%s$%d",
-            OPTIONS_SHEET_NAME,
-            getExcelColumnName(currentOptionsColumnIndex),
-            getExcelColumnName(currentOptionsColumnIndex),
+            tmpOptionsSheetName,
+            getExcelColumnName(0),
+            getExcelColumnName(0),
             value.size());
         // 设置名称管理器的引用位置
         name.setRefersToFormula(function);

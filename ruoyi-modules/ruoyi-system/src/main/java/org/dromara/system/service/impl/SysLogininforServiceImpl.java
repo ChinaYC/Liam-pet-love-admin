@@ -108,6 +108,13 @@ public class SysLogininforServiceImpl implements ISysLogininforService {
         return "[" + msg.toString() + "]";
     }
 
+    /**
+     * 分页查询登录日志列表
+     *
+     * @param logininfor 查询条件
+     * @param pageQuery  分页参数
+     * @return 登录日志分页列表
+     */
     @Override
     public TableDataInfo<SysLogininforVo> selectPageLogininforList(SysLogininforBo logininfor, PageQuery pageQuery) {
         Map<String, Object> params = logininfor.getParams();
@@ -118,8 +125,7 @@ public class SysLogininforServiceImpl implements ISysLogininforService {
             .between(params.get("beginTime") != null && params.get("endTime") != null,
                 SysLogininfor::getLoginTime, params.get("beginTime"), params.get("endTime"));
         if (StringUtils.isBlank(pageQuery.getOrderByColumn())) {
-            pageQuery.setOrderByColumn("info_id");
-            pageQuery.setIsAsc("desc");
+            lqw.orderByDesc(SysLogininfor::getInfoId);
         }
         Page<SysLogininforVo> page = baseMapper.selectVoPage(pageQuery.build(), lqw);
         return TableDataInfo.build(page);

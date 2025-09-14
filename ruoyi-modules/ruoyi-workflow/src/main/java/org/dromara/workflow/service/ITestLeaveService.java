@@ -5,7 +5,6 @@ import org.dromara.common.mybatis.core.page.TableDataInfo;
 import org.dromara.workflow.domain.bo.TestLeaveBo;
 import org.dromara.workflow.domain.vo.TestLeaveVo;
 
-import java.util.Collection;
 import java.util.List;
 
 /**
@@ -37,6 +36,11 @@ public interface ITestLeaveService {
     TestLeaveVo insertByBo(TestLeaveBo bo);
 
     /**
+     * 提交请假并发起流程
+     */
+    TestLeaveVo submitAndFlowStart(TestLeaveBo bo);
+
+    /**
      * 修改请假
      */
     TestLeaveVo updateByBo(TestLeaveBo bo);
@@ -44,5 +48,5 @@ public interface ITestLeaveService {
     /**
      * 校验并批量删除请假信息
      */
-    Boolean deleteWithValidByIds(Collection<Long> ids);
+    Boolean deleteWithValidByIds(List<Long> ids);
 }

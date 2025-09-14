@@ -1,8 +1,8 @@
 package org.dromara.system.controller.system;
 
-import cn.dev33.satoken.secure.BCrypt;
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.io.FileUtil;
+import cn.hutool.crypto.digest.BCrypt;
 import lombok.RequiredArgsConstructor;
 import org.dromara.common.core.domain.R;
 import org.dromara.common.core.utils.StringUtils;
@@ -17,8 +17,7 @@ import org.dromara.common.web.core.BaseController;
 import org.dromara.system.domain.bo.SysUserBo;
 import org.dromara.system.domain.bo.SysUserPasswordBo;
 import org.dromara.system.domain.bo.SysUserProfileBo;
-import org.dromara.system.domain.vo.AvatarVo;
-import org.dromara.system.domain.vo.ProfileVo;
+import org.dromara.system.domain.vo.ProfileUserVo;
 import org.dromara.system.domain.vo.SysOssVo;
 import org.dromara.system.domain.vo.SysUserVo;
 import org.dromara.system.service.ISysOssService;
@@ -50,10 +49,11 @@ public class SysProfileController extends BaseController {
     @GetMapping
     public R<ProfileVo> profile() {
         SysUserVo user = userService.selectUserById(LoginHelper.getUserId());
-        ProfileVo profileVo = new ProfileVo();
-        profileVo.setUser(user);
-        profileVo.setRoleGroup(userService.selectUserRoleGroup(user.getUserId()));
-        profileVo.setPostGroup(userService.selectUserPostGroup(user.getUserId()));
+        String roleGroup = userService.selectUserRoleGroup(user.getUserId());
+        String postGroup = userService.selectUserPostGroup(user.getUserId());
+        // 单独做一个vo专门给个人中心用 避免数据被脱敏
+        ProfileUserVo profileUser = BeanUtil.toBean(user, ProfileUserVo.class);
+        ProfileVo profileVo = new ProfileVo(profileUser, roleGroup, postGroup);
         return R.ok(profileVo);
     }
 
@@ -98,8 +98,8 @@ public class SysProfileController extends BaseController {
         if (BCrypt.checkpw(bo.getNewPassword(), password)) {
             return R.fail("新密码不能与旧密码相同");
         }
-
-        if (userService.resetUserPwd(user.getUserId(), BCrypt.hashpw(bo.getNewPassword())) > 0) {
+        int rows = DataPermissionHelper.ignore(() -> userService.resetUserPwd(user.getUserId(), BCrypt.hashpw(bo.getNewPassword())));
+        if (rows > 0) {
             return R.ok();
         }
         return R.fail("修改密码异常，请联系管理员");
@@ -121,12 +121,28 @@ public class SysProfileController extends BaseController {
             }
             SysOssVo oss = ossService.upload(avatarfile);
             String avatar = oss.getUrl();
-            if (userService.updateUserAvatar(LoginHelper.getUserId(), oss.getOssId())) {
-                AvatarVo avatarVo = new AvatarVo();
-                avatarVo.setImgUrl(avatar);
-                return R.ok(avatarVo);
+            boolean updateSuccess = DataPermissionHelper.ignore(() -> userService.updateUserAvatar(LoginHelper.getUserId(), oss.getOssId()));
+            if (updateSuccess) {
+                return R.ok(new AvatarVo(avatar));
             }
         }
         return R.fail("上传图片异常，请联系管理员");
     }
+
+    /**
+     * 用户头像信息
+     *
+     * @param imgUrl 头像地址
+     */
+    public record AvatarVo(String imgUrl) {}
+
+    /**
+     * 用户个人信息
+     *
+     * @param user      用户信息
+     * @param roleGroup 用户所属角色组
+     * @param postGroup 用户所属岗位组
+     */
+    public record ProfileVo(ProfileUserVo user, String roleGroup, String postGroup) {}
+
 }

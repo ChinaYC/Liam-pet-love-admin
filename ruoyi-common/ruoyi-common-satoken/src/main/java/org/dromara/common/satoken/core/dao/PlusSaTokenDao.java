@@ -1,6 +1,6 @@
 package org.dromara.common.satoken.core.dao;
 
-import cn.dev33.satoken.dao.SaTokenDao;
+import cn.dev33.satoken.dao.auto.SaTokenDaoBySessionFollowObject;
 import cn.dev33.satoken.util.SaFoxUtil;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
@@ -16,10 +16,12 @@ import java.util.concurrent.TimeUnit;
  * Sa-Token持久层接口(使用框架自带RedisUtils实现 协议统一)
  * <p>
  * 采用 caffeine + redis 多级缓存 优化并发查询效率
+ * <p>
+ * SaTokenDaoBySessionFollowObject 是 SaTokenDao 子集简化了session方法处理
  *
  * @author Lion Li
  */
-public class PlusSaTokenDao implements SaTokenDao {
+public class PlusSaTokenDao implements SaTokenDaoBySessionFollowObject {
 
     private static final Cache<String, Object> CAFFEINE = Caffeine.newBuilder()
         // 设置最后一次写入或访问后经过固定时间过期
@@ -72,7 +74,9 @@ public class PlusSaTokenDao implements SaTokenDao {
      */
     @Override
     public void delete(String key) {
-        RedisUtils.deleteObject(key);
+        if (RedisUtils.deleteObject(key)) {
+            CAFFEINE.invalidate(key);
+        }
     }
 
     /**
@@ -81,7 +85,8 @@ public class PlusSaTokenDao implements SaTokenDao {
     @Override
     public long getTimeout(String key) {
         long timeout = RedisUtils.getTimeToLive(key);
-        return timeout < 0 ? timeout : timeout / 1000;
+        // 加1的目的 解决sa-token使用秒 redis是毫秒导致1秒的精度问题 手动补偿
+        return timeout < 0 ? timeout : timeout / 1000 + 1;
     }
 
     /**
@@ -100,6 +105,19 @@ public class PlusSaTokenDao implements SaTokenDao {
     public Object getObject(String key) {
         Object o = CAFFEINE.get(key, k -> RedisUtils.getCacheObject(key));
         return o;
+    }
+
+    /**
+     * 获取 Object (指定反序列化类型)，如无返空
+     *
+     * @param key 键名称
+     * @return object
+     */
+    @SuppressWarnings("unchecked cast")
+    @Override
+    public <T> T getObject(String key, Class<T> classType) {
+        Object o = CAFFEINE.get(key, k -> RedisUtils.getCacheObject(key));
+        return (T) o;
     }
 
     /**
@@ -135,7 +153,9 @@ public class PlusSaTokenDao implements SaTokenDao {
      */
     @Override
     public void deleteObject(String key) {
-        RedisUtils.deleteObject(key);
+        if (RedisUtils.deleteObject(key)) {
+            CAFFEINE.invalidate(key);
+        }
     }
 
     /**
@@ -144,7 +164,8 @@ public class PlusSaTokenDao implements SaTokenDao {
     @Override
     public long getObjectTimeout(String key) {
         long timeout = RedisUtils.getTimeToLive(key);
-        return timeout < 0 ? timeout : timeout / 1000;
+        // 加1的目的 解决sa-token使用秒 redis是毫秒导致1秒的精度问题 手动补偿
+        return timeout < 0 ? timeout : timeout / 1000 + 1;
     }
 
     /**
@@ -154,7 +175,6 @@ public class PlusSaTokenDao implements SaTokenDao {
     public void updateObjectTimeout(String key, long timeout) {
         RedisUtils.expire(key, Duration.ofSeconds(timeout));
     }
-
 
     /**
      * 搜索数据

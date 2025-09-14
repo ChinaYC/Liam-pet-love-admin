@@ -5,9 +5,8 @@ import cn.hutool.core.convert.Convert;
 import cn.hutool.core.lang.tree.Tree;
 import cn.hutool.core.util.ObjectUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
-import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import lombok.RequiredArgsConstructor;
+import org.dromara.common.core.constant.Constants;
 import org.dromara.common.core.constant.SystemConstants;
 import org.dromara.common.core.utils.MapstructUtils;
 import org.dromara.common.core.utils.StreamUtils;
@@ -28,6 +27,7 @@ import org.dromara.system.mapper.SysRoleMenuMapper;
 import org.dromara.system.mapper.SysTenantPackageMapper;
 import org.dromara.system.service.ISysMenuService;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
 
@@ -65,25 +65,20 @@ public class SysMenuServiceImpl implements ISysMenuService {
     @Override
     public List<SysMenuVo> selectMenuList(SysMenuBo menu, Long userId) {
         List<SysMenuVo> menuList;
-        // 管理员显示所有菜单信息
-        if (LoginHelper.isSuperAdmin(userId)) {
-            menuList = baseMapper.selectVoList(new LambdaQueryWrapper<SysMenu>()
-                .like(StringUtils.isNotBlank(menu.getMenuName()), SysMenu::getMenuName, menu.getMenuName())
+        LambdaQueryWrapper<SysMenu> wrapper = new LambdaQueryWrapper<>();
+        // 管理员显示所有菜单信息 不是管理员 按用户id过滤菜单
+        if (!LoginHelper.isSuperAdmin(userId)) {
+            // 通过用户id获取角色id 通过角色id获取菜单id 然后in菜单
+            wrapper.inSql(SysMenu::getMenuId, baseMapper.buildMenuByUserSql(userId));
+        }
+        menuList = baseMapper.selectVoList(
+            wrapper.like(StringUtils.isNotBlank(menu.getMenuName()), SysMenu::getMenuName, menu.getMenuName())
                 .eq(StringUtils.isNotBlank(menu.getVisible()), SysMenu::getVisible, menu.getVisible())
                 .eq(StringUtils.isNotBlank(menu.getStatus()), SysMenu::getStatus, menu.getStatus())
+                .eq(StringUtils.isNotBlank(menu.getMenuType()), SysMenu::getMenuType, menu.getMenuType())
+                .eq(ObjectUtil.isNotNull(menu.getParentId()), SysMenu::getParentId, menu.getParentId())
                 .orderByAsc(SysMenu::getParentId)
                 .orderByAsc(SysMenu::getOrderNum));
-        } else {
-            QueryWrapper<SysMenu> wrapper = Wrappers.query();
-            wrapper.inSql("r.role_id", "select role_id from sys_user_role where user_id = " + userId)
-                .like(StringUtils.isNotBlank(menu.getMenuName()), "m.menu_name", menu.getMenuName())
-                .eq(StringUtils.isNotBlank(menu.getVisible()), "m.visible", menu.getVisible())
-                .eq(StringUtils.isNotBlank(menu.getStatus()), "m.status", menu.getStatus())
-                .orderByAsc("m.parent_id")
-                .orderByAsc("m.order_num");
-            List<SysMenu> list = baseMapper.selectMenuListByUserId(wrapper);
-            menuList = MapstructUtils.convert(list, SysMenuVo.class);
-        }
         return menuList;
     }
 
@@ -95,14 +90,7 @@ public class SysMenuServiceImpl implements ISysMenuService {
      */
     @Override
     public Set<String> selectMenuPermsByUserId(Long userId) {
-        List<String> perms = baseMapper.selectMenuPermsByUserId(userId);
-        Set<String> permsSet = new HashSet<>();
-        for (String perm : perms) {
-            if (StringUtils.isNotEmpty(perm)) {
-                permsSet.addAll(StringUtils.splitList(perm.trim()));
-            }
-        }
-        return permsSet;
+        return baseMapper.selectMenuPermsByUserId(userId);
     }
 
     /**
@@ -113,14 +101,7 @@ public class SysMenuServiceImpl implements ISysMenuService {
      */
     @Override
     public Set<String> selectMenuPermsByRoleId(Long roleId) {
-        List<String> perms = baseMapper.selectMenuPermsByRoleId(roleId);
-        Set<String> permsSet = new HashSet<>();
-        for (String perm : perms) {
-            if (StringUtils.isNotEmpty(perm)) {
-                permsSet.addAll(StringUtils.splitList(perm.trim()));
-            }
-        }
-        return permsSet;
+        return baseMapper.selectMenuPermsByRoleId(roleId);
     }
 
     /**
@@ -135,9 +116,15 @@ public class SysMenuServiceImpl implements ISysMenuService {
         if (LoginHelper.isSuperAdmin(userId)) {
             menus = baseMapper.selectMenuTreeAll();
         } else {
-            menus = baseMapper.selectMenuTreeByUserId(userId);
+            LambdaQueryWrapper<SysMenu> wrapper = new LambdaQueryWrapper<>();
+            menus = baseMapper.selectList(
+                wrapper.in(SysMenu::getMenuType, SystemConstants.TYPE_DIR, SystemConstants.TYPE_MENU)
+                    .eq(SysMenu::getStatus, SystemConstants.NORMAL)
+                    .inSql(SysMenu::getMenuId, baseMapper.buildMenuByUserSql(userId))
+                    .orderByAsc(SysMenu::getParentId)
+                    .orderByAsc(SysMenu::getOrderNum));
         }
-        return getChildPerms(menus, 0);
+        return getChildPerms(menus, Constants.TOP_PARENT_ID);
     }
 
     /**
@@ -169,11 +156,16 @@ public class SysMenuServiceImpl implements ISysMenuService {
         if (tenantPackage.getMenuCheckStrictly()) {
             parentIds = baseMapper.selectObjs(new LambdaQueryWrapper<SysMenu>()
                 .select(SysMenu::getParentId)
-                .in(SysMenu::getMenuId, menuIds), x -> {return Convert.toLong(x);});
+                .in(SysMenu::getMenuId, menuIds), x -> {
+                return Convert.toLong(x);
+            });
         }
         return baseMapper.selectObjs(new LambdaQueryWrapper<SysMenu>()
+            .select(SysMenu::getMenuId)
             .in(SysMenu::getMenuId, menuIds)
-            .notIn(CollUtil.isNotEmpty(parentIds), SysMenu::getMenuId, parentIds), x -> {return Convert.toLong(x);});
+            .notIn(CollUtil.isNotEmpty(parentIds), SysMenu::getMenuId, parentIds), x -> {
+            return Convert.toLong(x);
+        });
     }
 
     /**
@@ -194,7 +186,7 @@ public class SysMenuServiceImpl implements ISysMenuService {
             router.setPath(menu.getRouterPath());
             router.setComponent(menu.getComponentInfo());
             router.setQuery(menu.getQueryParam());
-            router.setMeta(new MetaVo(menu.getMenuName(), menu.getIcon(), StringUtils.equals("1", menu.getIsCache()), menu.getPath()));
+            router.setMeta(new MetaVo(menu.getMenuName(), menu.getIcon(), StringUtils.equals("1", menu.getIsCache()), menu.getPath(), menu.getRemark()));
             List<SysMenu> cMenus = menu.getChildren();
             if (CollUtil.isNotEmpty(cMenus) && SystemConstants.TYPE_DIR.equals(menu.getMenuType())) {
                 router.setAlwaysShow(true);
@@ -208,11 +200,11 @@ public class SysMenuServiceImpl implements ISysMenuService {
                 children.setPath(menu.getPath());
                 children.setComponent(menu.getComponent());
                 children.setName(frameName);
-                children.setMeta(new MetaVo(menu.getMenuName(), menu.getIcon(), StringUtils.equals("1", menu.getIsCache()), menu.getPath()));
+                children.setMeta(new MetaVo(menu.getMenuName(), menu.getIcon(), StringUtils.equals("1", menu.getIsCache()), menu.getPath(), menu.getRemark()));
                 children.setQuery(menu.getQueryParam());
                 childrenList.add(children);
                 router.setChildren(childrenList);
-            } else if (menu.getParentId().intValue() == 0 && menu.isInnerLink()) {
+            } else if (menu.getParentId().equals(Constants.TOP_PARENT_ID) && menu.isInnerLink()) {
                 router.setMeta(new MetaVo(menu.getMenuName(), menu.getIcon()));
                 router.setPath("/");
                 List<RouterVo> childrenList = new ArrayList<>();
@@ -242,11 +234,14 @@ public class SysMenuServiceImpl implements ISysMenuService {
         if (CollUtil.isEmpty(menus)) {
             return CollUtil.newArrayList();
         }
-        return TreeBuildUtils.build(menus, (menu, tree) ->
-            tree.setId(menu.getMenuId())
+        return TreeBuildUtils.build(menus, (menu, tree) -> {
+            Tree<Long> menuTree = tree.setId(menu.getMenuId())
                 .setParentId(menu.getParentId())
                 .setName(menu.getMenuName())
-                .setWeight(menu.getOrderNum()));
+                .setWeight(menu.getOrderNum());
+            menuTree.put("menuType", menu.getMenuType());
+            menuTree.put("icon", menu.getIcon());
+        });
     }
 
     /**
@@ -269,6 +264,17 @@ public class SysMenuServiceImpl implements ISysMenuService {
     @Override
     public boolean hasChildByMenuId(Long menuId) {
         return baseMapper.exists(new LambdaQueryWrapper<SysMenu>().eq(SysMenu::getParentId, menuId));
+    }
+
+    /**
+     * 是否存在菜单子节点
+     *
+     * @param menuIds 菜单ID串
+     * @return 结果
+     */
+    @Override
+    public boolean hasChildByMenuId(List<Long> menuIds) {
+        return baseMapper.exists(new LambdaQueryWrapper<SysMenu>().in(SysMenu::getParentId, menuIds).notIn(SysMenu::getMenuId, menuIds));
     }
 
     /**
@@ -318,6 +324,19 @@ public class SysMenuServiceImpl implements ISysMenuService {
     }
 
     /**
+     * 批量删除菜单管理信息
+     *
+     * @param menuIds 菜单ID串
+     * @return 结果
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteMenuById(List<Long> menuIds) {
+        baseMapper.deleteByIds(menuIds);
+        roleMenuMapper.deleteByMenuIds(menuIds);
+    }
+
+    /**
      * 校验菜单名称是否唯一
      *
      * @param menu 菜单信息
@@ -339,11 +358,11 @@ public class SysMenuServiceImpl implements ISysMenuService {
      * @param parentId 传入的父节点ID
      * @return String
      */
-    private List<SysMenu> getChildPerms(List<SysMenu> list, int parentId) {
+    private List<SysMenu> getChildPerms(List<SysMenu> list, Long parentId) {
         List<SysMenu> returnList = new ArrayList<>();
         for (SysMenu t : list) {
             // 一、根据传入的某个父节点ID,遍历该父节点的所有子节点
-            if (t.getParentId() == parentId) {
+            if (t.getParentId().equals(parentId)) {
                 recursionFn(list, t);
                 returnList.add(t);
             }

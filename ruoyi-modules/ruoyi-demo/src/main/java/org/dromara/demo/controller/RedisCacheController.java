@@ -1,5 +1,6 @@
 package org.dromara.demo.controller;
 
+import cn.hutool.core.thread.ThreadUtil;
 import org.dromara.common.core.constant.CacheNames;
 import org.dromara.common.core.domain.R;
 import org.dromara.common.redis.utils.RedisUtils;
@@ -39,7 +40,7 @@ public class RedisCacheController {
      * <p>
      * cacheNames 命名规则 查看 {@link CacheNames} 注释 支持多参数
      */
-    @Cacheable(cacheNames = "demo:cache#60s#10m#20", key = "#key", condition = "#key != null")
+    @Cacheable(cacheNames = "demo:cache#60s#10m#20#1", key = "#key", condition = "#key != null")
     @GetMapping("/test1")
     public R<String> test1(String key, String value) {
         return R.ok("操作成功", value);
@@ -83,11 +84,7 @@ public class RedisCacheController {
         RedisUtils.setCacheObject(key, value);
         boolean flag = RedisUtils.expire(key, Duration.ofSeconds(10));
         System.out.println("***********" + flag);
-        try {
-            Thread.sleep(11 * 1000);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
+        ThreadUtil.sleep(11 * 1000);
         Object obj = RedisUtils.getCacheObject(key);
         return R.ok(value.equals(obj));
     }

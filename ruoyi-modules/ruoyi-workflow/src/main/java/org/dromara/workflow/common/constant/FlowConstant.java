@@ -8,130 +8,88 @@ package org.dromara.workflow.common.constant;
  */
 public interface FlowConstant {
 
-    String MESSAGE_CURRENT_TASK_IS_NULL = "当前任务不存在或你不是任务办理人！";
-
-    String MESSAGE_SUSPENDED = "当前任务已挂起不可审批！";
-
-    /**
-     * 连线
-     */
-    String SEQUENCE_FLOW = "sequenceFlow";
-
-    /**
-     * 并行网关
-     */
-    String PARALLEL_GATEWAY = "parallelGateway";
-
-    /**
-     * 排它网关
-     */
-    String EXCLUSIVE_GATEWAY = "exclusiveGateway";
-
-    /**
-     * 包含网关
-     */
-    String INCLUSIVE_GATEWAY = "inclusiveGateway";
-
-    /**
-     * 结束节点
-     */
-    String END_EVENT = "endEvent";
-
-
-    /**
-     * 流程委派标识
-     */
-    String PENDING = "PENDING";
-
-    /**
-     * 候选人标识
-     */
-    String CANDIDATE = "candidate";
-
-    /**
-     * 会签任务总数
-     */
-    String NUMBER_OF_INSTANCES = "nrOfInstances";
-
-    /**
-     * 正在执行的会签总数
-     */
-    String NUMBER_OF_ACTIVE_INSTANCES = "nrOfActiveInstances";
-
-    /**
-     * 已完成的会签任务总数
-     */
-    String NUMBER_OF_COMPLETED_INSTANCES = "nrOfCompletedInstances";
-
-    /**
-     * 循环的索引值，可以使用elementIndexVariable属性修改loopCounter的变量名
-     */
-    String LOOP_COUNTER = "loopCounter";
-
-    String ZIP = "ZIP";
-
-    /**
-     * 业务与流程实例关联对象
-     */
-    String BUSINESS_INSTANCE_DTO = "businessInstanceDTO";
-
-    /**
-     * 流程定义配置
-     */
-    String WF_DEFINITION_CONFIG_VO = "wfDefinitionConfigVo";
-
-    /**
-     * 节点配置
-     */
-    String WF_NODE_CONFIG_VO = "wfNodeConfigVo";
-
     /**
      * 流程发起人
      */
     String INITIATOR = "initiator";
 
     /**
-     * 流程实例id
-     */
-    String PROCESS_INSTANCE_ID = "processInstanceId";
-
-    /**
      * 业务id
      */
-    String BUSINESS_KEY = "businessKey";
+    String BUSINESS_ID = "businessId";
 
     /**
-     * 流程定义id
+     * 部门id
      */
-    String PROCESS_DEFINITION_ID = "processDefinitionId";
+    String INITIATOR_DEPT_ID = "initiatorDeptId";
 
     /**
-     * 开启跳过表达式变量
+     * 委托
      */
-    String FLOWABLE_SKIP_EXPRESSION_ENABLED = "_FLOWABLE_SKIP_EXPRESSION_ENABLED";
+    String DELEGATE_TASK = "delegateTask";
 
     /**
-     * 模型标识key命名规范正则表达式
+     * 转办
      */
-    String MODEL_KEY_PATTERN = "^[a-zA-Z][a-zA-Z0-9_]{0,254}$";
+    String TRANSFER_TASK = "transferTask";
 
     /**
-     * 用户任务
+     * 加签
      */
-    String USER_TASK = "userTask";
+    String ADD_SIGNATURE = "addSignature";
 
     /**
-     * 会签
+     * 减签
      */
-    String MULTI_INSTANCE = "multiInstance";
+    String REDUCTION_SIGNATURE = "reductionSignature";
 
     /**
-     * 是
+     * 流程分类Id转名称
      */
-    String TRUE = "0";
+    String CATEGORY_ID_TO_NAME = "category_id_to_name";
 
     /**
-     * 否
+     * 流程分类名称
      */
-    String FALSE = "1";
+    String FLOW_CATEGORY_NAME = "flow_category_name#30d";
+
+    /**
+     * 默认租户OA申请分类id
+     */
+    Long FLOW_CATEGORY_ID = 100L;
+
+    /**
+     * 是否为申请人提交常量
+     */
+    String SUBMIT = "submit";
+
+    /**
+     * 抄送常量
+     */
+    String FLOW_COPY_LIST = "flowCopyList";
+
+    /**
+     * 消息类型常量
+     */
+    String MESSAGE_TYPE = "messageType";
+
+    /**
+     * 消息通知常量
+     */
+    String MESSAGE_NOTICE = "messageNotice";
+
+    /**
+     * 任务状态
+     */
+    String WF_TASK_STATUS = "wf_task_status";
+
+    /**
+     * 自动通过
+     */
+    String AUTO_PASS = "autoPass";
+
+    /**
+     * 业务编码
+     */
+    String BUSINESS_CODE = "businessCode";
 }

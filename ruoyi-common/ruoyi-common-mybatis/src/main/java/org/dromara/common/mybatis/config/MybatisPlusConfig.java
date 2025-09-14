@@ -2,6 +2,7 @@ package org.dromara.common.mybatis.config;
 
 import cn.hutool.core.net.NetUtil;
 import com.baomidou.mybatisplus.core.handlers.MetaObjectHandler;
+import com.baomidou.mybatisplus.core.handlers.PostInitTableInfoHandler;
 import com.baomidou.mybatisplus.core.incrementer.DefaultIdentifierGenerator;
 import com.baomidou.mybatisplus.core.incrementer.IdentifierGenerator;
 import com.baomidou.mybatisplus.extension.plugins.MybatisPlusInterceptor;
@@ -10,14 +11,17 @@ import com.baomidou.mybatisplus.extension.plugins.inner.PaginationInnerIntercept
 import com.baomidou.mybatisplus.extension.plugins.inner.TenantLineInnerInterceptor;
 import org.dromara.common.core.factory.YmlPropertySourceFactory;
 import org.dromara.common.core.utils.SpringUtils;
-import org.dromara.common.mybatis.aspect.DataPermissionAspect;
+import org.dromara.common.mybatis.aspect.DataPermissionPointcutAdvisor;
 import org.dromara.common.mybatis.handler.InjectionMetaObjectHandler;
 import org.dromara.common.mybatis.handler.MybatisExceptionHandler;
+import org.dromara.common.mybatis.handler.PlusPostInitTableInfoHandler;
 import org.dromara.common.mybatis.interceptor.PlusDataPermissionInterceptor;
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.beans.BeansException;
+import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.PropertySource;
+import org.springframework.context.annotation.Role;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 
 /**
@@ -25,6 +29,7 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
  *
  * @author Lion Li
  */
+@Role(BeanDefinition.ROLE_INFRASTRUCTURE)
 @EnableTransactionManagement(proxyTargetClass = true)
 @MapperScan("${mybatis-plus.mapperPackage}")
 @PropertySource(value = "classpath:common-mybatis.yml", factory = YmlPropertySourceFactory.class)
@@ -52,15 +57,16 @@ public class MybatisPlusConfig {
      * 数据权限拦截器
      */
     public PlusDataPermissionInterceptor dataPermissionInterceptor() {
-        return new PlusDataPermissionInterceptor(SpringUtils.getProperty("mybatis-plus.mapperPackage"));
+        return new PlusDataPermissionInterceptor();
     }
 
     /**
      * 数据权限切面处理器
      */
     @Bean
-    public DataPermissionAspect dataPermissionAspect() {
-        return new DataPermissionAspect();
+    @Role(BeanDefinition.ROLE_INFRASTRUCTURE)
+    public DataPermissionPointcutAdvisor dataPermissionPointcutAdvisor() {
+        return new DataPermissionPointcutAdvisor();
     }
 
     /**
@@ -103,6 +109,14 @@ public class MybatisPlusConfig {
     @Bean
     public MybatisExceptionHandler mybatisExceptionHandler() {
         return new MybatisExceptionHandler();
+    }
+
+    /**
+     * 初始化表对象处理器
+     */
+    @Bean
+    public PostInitTableInfoHandler postInitTableInfoHandler() {
+        return new PlusPostInitTableInfoHandler();
     }
 
     /**

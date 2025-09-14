@@ -2,7 +2,7 @@
  SnailJob Database Transfer Tool
  Source Server Type    : MySQL
  Target Server Type    : Microsoft SQL Server
- Date: 2024-07-06 12:55:47
+ Date: 2025-06-21 23:34:44
 */
 
 
@@ -95,7 +95,6 @@ CREATE TABLE sj_group_config
     group_partition   int           NOT NULL,
     id_generator_mode tinyint       NOT NULL DEFAULT 1,
     init_scene        tinyint       NOT NULL DEFAULT 0,
-    bucket_index      int           NOT NULL DEFAULT 0,
     create_dt         datetime2     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     update_dt         datetime2     NOT NULL DEFAULT CURRENT_TIMESTAMP
 )
@@ -175,13 +174,6 @@ EXEC sp_addextendedproperty
 GO
 
 EXEC sp_addextendedproperty
-     'MS_Description', N'bucket',
-     'SCHEMA', N'dbo',
-     'TABLE', N'sj_group_config',
-     'COLUMN', N'bucket_index'
-GO
-
-EXEC sp_addextendedproperty
      'MS_Description', N'创建时间',
      'SCHEMA', N'dbo',
      'TABLE', N'sj_group_config',
@@ -201,9 +193,9 @@ EXEC sp_addextendedproperty
      'TABLE', N'sj_group_config'
 GO
 
-INSERT INTO sj_group_config(namespace_id, group_name, description, token, group_status, version, group_partition, id_generator_mode, init_scene, bucket_index, create_dt, update_dt) VALUES (N'dev', N'ruoyi_group', N'', N'SJ_cKqBTPzCsWA3VyuCfFoccmuIEGXjr5KT', N'1', N'1', N'0', N'1', N'1', N'4', getdate(), getdate())
+INSERT INTO sj_group_config(namespace_id, group_name, description, token, group_status, version, group_partition, id_generator_mode, init_scene, create_dt, update_dt) VALUES (N'dev', N'ruoyi_group', N'', N'SJ_cKqBTPzCsWA3VyuCfFoccmuIEGXjr5KT', N'1', N'1', N'0', N'1', N'1', getdate(), getdate())
 GO
-INSERT INTO sj_group_config(namespace_id, group_name, description, token, group_status, version, group_partition, id_generator_mode, init_scene, bucket_index, create_dt, update_dt) VALUES (N'prod', N'ruoyi_group', N'', N'SJ_cKqBTPzCsWA3VyuCfFoccmuIEGXjr5KT', N'1', N'1', N'0', N'1', N'1', N'4', getdate(), getdate())
+INSERT INTO sj_group_config(namespace_id, group_name, description, token, group_status, version, group_partition, id_generator_mode, init_scene, create_dt, update_dt) VALUES (N'prod', N'ruoyi_group', N'', N'SJ_cKqBTPzCsWA3VyuCfFoccmuIEGXjr5KT', N'1', N'1', N'0', N'1', N'1', getdate(), getdate())
 GO
 
 -- sj_notify_config
@@ -212,7 +204,7 @@ CREATE TABLE sj_notify_config
     id                     bigint        NOT NULL PRIMARY KEY IDENTITY,
     namespace_id           nvarchar(64)  NOT NULL DEFAULT '764d604ec6fc45f68cd92514c40e9e1a',
     group_name             nvarchar(64)  NOT NULL,
-    business_id            nvarchar(64)  NOT NULL,
+    notify_name            nvarchar(64)  NOT NULL DEFAULT '',
     system_task_type       tinyint       NOT NULL DEFAULT 3,
     notify_status          tinyint       NOT NULL DEFAULT 0,
     recipient_ids          nvarchar(128) NOT NULL,
@@ -226,7 +218,7 @@ CREATE TABLE sj_notify_config
 )
 GO
 
-CREATE INDEX idx_sj_notify_config_01 ON sj_notify_config (namespace_id, group_name, business_id)
+CREATE INDEX idx_sj_notify_config_01 ON sj_notify_config (namespace_id, group_name)
 GO
 
 EXEC sp_addextendedproperty
@@ -251,10 +243,10 @@ EXEC sp_addextendedproperty
 GO
 
 EXEC sp_addextendedproperty
-     'MS_Description', N'业务id  ( job_id或workflow_id或scene_name ) ',
+     'MS_Description', N'通知名称',
      'SCHEMA', N'dbo',
      'TABLE', N'sj_notify_config',
-     'COLUMN', N'business_id'
+     'COLUMN', N'notify_name'
 GO
 
 EXEC sp_addextendedproperty
@@ -412,434 +404,458 @@ EXEC sp_addextendedproperty
      'TABLE', N'sj_notify_recipient'
 GO
 
--- sj_retry_dead_letter_0
-CREATE TABLE sj_retry_dead_letter_0
+-- sj_retry_dead_letter
+CREATE TABLE sj_retry_dead_letter
 (
-    id            bigint        NOT NULL PRIMARY KEY IDENTITY,
-    namespace_id  nvarchar(64)  NOT NULL DEFAULT '764d604ec6fc45f68cd92514c40e9e1a',
-    unique_id     nvarchar(64)  NOT NULL,
-    group_name    nvarchar(64)  NOT NULL,
-    scene_name    nvarchar(64)  NOT NULL,
-    idempotent_id nvarchar(64)  NOT NULL,
-    biz_no        nvarchar(64)  NOT NULL DEFAULT '',
-    executor_name nvarchar(512) NOT NULL DEFAULT '',
-    args_str      nvarchar(max) NOT NULL,
-    ext_attrs     nvarchar(max) NOT NULL,
-    task_type     tinyint       NOT NULL DEFAULT 1,
-    create_dt     datetime2     NOT NULL DEFAULT CURRENT_TIMESTAMP
+    id              bigint        NOT NULL PRIMARY KEY IDENTITY,
+    namespace_id    nvarchar(64)  NOT NULL DEFAULT '764d604ec6fc45f68cd92514c40e9e1a',
+    group_name      nvarchar(64)  NOT NULL,
+    group_id        bigint        NOT NULL,
+    scene_name      nvarchar(64)  NOT NULL,
+    scene_id        bigint        NOT NULL,
+    idempotent_id   nvarchar(64)  NOT NULL,
+    biz_no          nvarchar(64)  NOT NULL DEFAULT '',
+    executor_name   nvarchar(512) NOT NULL DEFAULT '',
+    serializer_name nvarchar(32)  NOT NULL DEFAULT 'jackson',
+    args_str        nvarchar(max) NOT NULL,
+    ext_attrs       nvarchar(max) NOT NULL,
+    create_dt       datetime2     NOT NULL DEFAULT CURRENT_TIMESTAMP
 )
 GO
 
-CREATE UNIQUE INDEX uk_sj_retry_dead_letter_0_01 ON sj_retry_dead_letter_0 (namespace_id, group_name, unique_id)
+CREATE INDEX idx_sj_retry_dead_letter_01 ON sj_retry_dead_letter (namespace_id, group_name, scene_name)
 GO
-
-CREATE INDEX idx_sj_retry_dead_letter_0_01 ON sj_retry_dead_letter_0 (namespace_id, group_name, scene_name)
+CREATE INDEX idx_sj_retry_dead_letter_02 ON sj_retry_dead_letter (idempotent_id)
 GO
-CREATE INDEX idx_sj_retry_dead_letter_0_02 ON sj_retry_dead_letter_0 (idempotent_id)
+CREATE INDEX idx_sj_retry_dead_letter_03 ON sj_retry_dead_letter (biz_no)
 GO
-CREATE INDEX idx_sj_retry_dead_letter_0_03 ON sj_retry_dead_letter_0 (biz_no)
-GO
-CREATE INDEX idx_sj_retry_dead_letter_0_04 ON sj_retry_dead_letter_0 (create_dt)
+CREATE INDEX idx_sj_retry_dead_letter_04 ON sj_retry_dead_letter (create_dt)
 GO
 
 EXEC sp_addextendedproperty
      'MS_Description', N'主键',
      'SCHEMA', N'dbo',
-     'TABLE', N'sj_retry_dead_letter_0',
+     'TABLE', N'sj_retry_dead_letter',
      'COLUMN', N'id'
 GO
 
 EXEC sp_addextendedproperty
      'MS_Description', N'命名空间id',
      'SCHEMA', N'dbo',
-     'TABLE', N'sj_retry_dead_letter_0',
+     'TABLE', N'sj_retry_dead_letter',
      'COLUMN', N'namespace_id'
-GO
-
-EXEC sp_addextendedproperty
-     'MS_Description', N'同组下id唯一',
-     'SCHEMA', N'dbo',
-     'TABLE', N'sj_retry_dead_letter_0',
-     'COLUMN', N'unique_id'
 GO
 
 EXEC sp_addextendedproperty
      'MS_Description', N'组名称',
      'SCHEMA', N'dbo',
-     'TABLE', N'sj_retry_dead_letter_0',
+     'TABLE', N'sj_retry_dead_letter',
      'COLUMN', N'group_name'
+GO
+
+EXEC sp_addextendedproperty
+     'MS_Description', N'组Id',
+     'SCHEMA', N'dbo',
+     'TABLE', N'sj_retry_dead_letter',
+     'COLUMN', N'group_id'
 GO
 
 EXEC sp_addextendedproperty
      'MS_Description', N'场景名称',
      'SCHEMA', N'dbo',
-     'TABLE', N'sj_retry_dead_letter_0',
+     'TABLE', N'sj_retry_dead_letter',
      'COLUMN', N'scene_name'
+GO
+
+EXEC sp_addextendedproperty
+     'MS_Description', N'场景ID',
+     'SCHEMA', N'dbo',
+     'TABLE', N'sj_retry_dead_letter',
+     'COLUMN', N'scene_id'
 GO
 
 EXEC sp_addextendedproperty
      'MS_Description', N'幂等id',
      'SCHEMA', N'dbo',
-     'TABLE', N'sj_retry_dead_letter_0',
+     'TABLE', N'sj_retry_dead_letter',
      'COLUMN', N'idempotent_id'
 GO
 
 EXEC sp_addextendedproperty
      'MS_Description', N'业务编号',
      'SCHEMA', N'dbo',
-     'TABLE', N'sj_retry_dead_letter_0',
+     'TABLE', N'sj_retry_dead_letter',
      'COLUMN', N'biz_no'
 GO
 
 EXEC sp_addextendedproperty
      'MS_Description', N'执行器名称',
      'SCHEMA', N'dbo',
-     'TABLE', N'sj_retry_dead_letter_0',
+     'TABLE', N'sj_retry_dead_letter',
      'COLUMN', N'executor_name'
+GO
+
+EXEC sp_addextendedproperty
+     'MS_Description', N'执行方法参数序列化器名称',
+     'SCHEMA', N'dbo',
+     'TABLE', N'sj_retry_dead_letter',
+     'COLUMN', N'serializer_name'
 GO
 
 EXEC sp_addextendedproperty
      'MS_Description', N'执行方法参数',
      'SCHEMA', N'dbo',
-     'TABLE', N'sj_retry_dead_letter_0',
+     'TABLE', N'sj_retry_dead_letter',
      'COLUMN', N'args_str'
 GO
 
 EXEC sp_addextendedproperty
      'MS_Description', N'扩展字段',
      'SCHEMA', N'dbo',
-     'TABLE', N'sj_retry_dead_letter_0',
+     'TABLE', N'sj_retry_dead_letter',
      'COLUMN', N'ext_attrs'
-GO
-
-EXEC sp_addextendedproperty
-     'MS_Description', N'任务类型 1、重试数据 2、回调数据',
-     'SCHEMA', N'dbo',
-     'TABLE', N'sj_retry_dead_letter_0',
-     'COLUMN', N'task_type'
 GO
 
 EXEC sp_addextendedproperty
      'MS_Description', N'创建时间',
      'SCHEMA', N'dbo',
-     'TABLE', N'sj_retry_dead_letter_0',
+     'TABLE', N'sj_retry_dead_letter',
      'COLUMN', N'create_dt'
 GO
 
 EXEC sp_addextendedproperty
      'MS_Description', N'死信队列表',
      'SCHEMA', N'dbo',
-     'TABLE', N'sj_retry_dead_letter_0'
+     'TABLE', N'sj_retry_dead_letter'
 GO
 
--- sj_retry_task_0
-CREATE TABLE sj_retry_task_0
+-- sj_retry
+CREATE TABLE sj_retry
 (
     id              bigint        NOT NULL PRIMARY KEY IDENTITY,
     namespace_id    nvarchar(64)  NOT NULL DEFAULT '764d604ec6fc45f68cd92514c40e9e1a',
-    unique_id       nvarchar(64)  NOT NULL,
     group_name      nvarchar(64)  NOT NULL,
+    group_id        bigint        NOT NULL,
     scene_name      nvarchar(64)  NOT NULL,
+    scene_id        bigint        NOT NULL,
     idempotent_id   nvarchar(64)  NOT NULL,
     biz_no          nvarchar(64)  NOT NULL DEFAULT '',
     executor_name   nvarchar(512) NOT NULL DEFAULT '',
     args_str        nvarchar(max) NOT NULL,
     ext_attrs       nvarchar(max) NOT NULL,
-    next_trigger_at datetime2     NOT NULL,
+    serializer_name nvarchar(32)  NOT NULL DEFAULT 'jackson',
+    next_trigger_at bigint        NOT NULL,
     retry_count     int           NOT NULL DEFAULT 0,
     retry_status    tinyint       NOT NULL DEFAULT 0,
     task_type       tinyint       NOT NULL DEFAULT 1,
+    bucket_index    int           NOT NULL DEFAULT 0,
+    parent_id       bigint        NOT NULL DEFAULT 0,
+    deleted         bigint        NOT NULL DEFAULT 0,
     create_dt       datetime2     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     update_dt       datetime2     NOT NULL DEFAULT CURRENT_TIMESTAMP
 )
 GO
 
-CREATE UNIQUE INDEX uk_sj_retry_task_0_01 ON sj_retry_task_0 (namespace_id, group_name, unique_id)
+CREATE UNIQUE INDEX uk_sj_retry_01 ON sj_retry (scene_id, task_type, idempotent_id, deleted)
 GO
 
-CREATE INDEX idx_sj_retry_task_0_01 ON sj_retry_task_0 (namespace_id, group_name, scene_name)
+CREATE INDEX idx_sj_retry_01 ON sj_retry (biz_no)
 GO
-CREATE INDEX idx_sj_retry_task_0_02 ON sj_retry_task_0 (namespace_id, group_name, task_type)
+CREATE INDEX idx_sj_retry_02 ON sj_retry (idempotent_id)
 GO
-CREATE INDEX idx_sj_retry_task_0_03 ON sj_retry_task_0 (namespace_id, group_name, retry_status)
+CREATE INDEX idx_sj_retry_03 ON sj_retry (retry_status, bucket_index)
 GO
-CREATE INDEX idx_sj_retry_task_0_04 ON sj_retry_task_0 (idempotent_id)
+CREATE INDEX idx_sj_retry_04 ON sj_retry (parent_id)
 GO
-CREATE INDEX idx_sj_retry_task_0_05 ON sj_retry_task_0 (biz_no)
-GO
-CREATE INDEX idx_sj_retry_task_0_06 ON sj_retry_task_0 (create_dt)
+CREATE INDEX idx_sj_retry_05 ON sj_retry (create_dt)
 GO
 
 EXEC sp_addextendedproperty
      'MS_Description', N'主键',
      'SCHEMA', N'dbo',
-     'TABLE', N'sj_retry_task_0',
+     'TABLE', N'sj_retry',
      'COLUMN', N'id'
 GO
 
 EXEC sp_addextendedproperty
      'MS_Description', N'命名空间id',
      'SCHEMA', N'dbo',
-     'TABLE', N'sj_retry_task_0',
+     'TABLE', N'sj_retry',
      'COLUMN', N'namespace_id'
-GO
-
-EXEC sp_addextendedproperty
-     'MS_Description', N'同组下id唯一',
-     'SCHEMA', N'dbo',
-     'TABLE', N'sj_retry_task_0',
-     'COLUMN', N'unique_id'
 GO
 
 EXEC sp_addextendedproperty
      'MS_Description', N'组名称',
      'SCHEMA', N'dbo',
-     'TABLE', N'sj_retry_task_0',
+     'TABLE', N'sj_retry',
      'COLUMN', N'group_name'
+GO
+
+EXEC sp_addextendedproperty
+     'MS_Description', N'组Id',
+     'SCHEMA', N'dbo',
+     'TABLE', N'sj_retry',
+     'COLUMN', N'group_id'
 GO
 
 EXEC sp_addextendedproperty
      'MS_Description', N'场景名称',
      'SCHEMA', N'dbo',
-     'TABLE', N'sj_retry_task_0',
+     'TABLE', N'sj_retry',
      'COLUMN', N'scene_name'
+GO
+
+EXEC sp_addextendedproperty
+     'MS_Description', N'场景ID',
+     'SCHEMA', N'dbo',
+     'TABLE', N'sj_retry',
+     'COLUMN', N'scene_id'
 GO
 
 EXEC sp_addextendedproperty
      'MS_Description', N'幂等id',
      'SCHEMA', N'dbo',
-     'TABLE', N'sj_retry_task_0',
+     'TABLE', N'sj_retry',
      'COLUMN', N'idempotent_id'
 GO
 
 EXEC sp_addextendedproperty
      'MS_Description', N'业务编号',
      'SCHEMA', N'dbo',
-     'TABLE', N'sj_retry_task_0',
+     'TABLE', N'sj_retry',
      'COLUMN', N'biz_no'
 GO
 
 EXEC sp_addextendedproperty
      'MS_Description', N'执行器名称',
      'SCHEMA', N'dbo',
-     'TABLE', N'sj_retry_task_0',
+     'TABLE', N'sj_retry',
      'COLUMN', N'executor_name'
 GO
 
 EXEC sp_addextendedproperty
      'MS_Description', N'执行方法参数',
      'SCHEMA', N'dbo',
-     'TABLE', N'sj_retry_task_0',
+     'TABLE', N'sj_retry',
      'COLUMN', N'args_str'
 GO
 
 EXEC sp_addextendedproperty
      'MS_Description', N'扩展字段',
      'SCHEMA', N'dbo',
-     'TABLE', N'sj_retry_task_0',
+     'TABLE', N'sj_retry',
      'COLUMN', N'ext_attrs'
+GO
+
+EXEC sp_addextendedproperty
+     'MS_Description', N'执行方法参数序列化器名称',
+     'SCHEMA', N'dbo',
+     'TABLE', N'sj_retry',
+     'COLUMN', N'serializer_name'
 GO
 
 EXEC sp_addextendedproperty
      'MS_Description', N'下次触发时间',
      'SCHEMA', N'dbo',
-     'TABLE', N'sj_retry_task_0',
+     'TABLE', N'sj_retry',
      'COLUMN', N'next_trigger_at'
 GO
 
 EXEC sp_addextendedproperty
      'MS_Description', N'重试次数',
      'SCHEMA', N'dbo',
-     'TABLE', N'sj_retry_task_0',
+     'TABLE', N'sj_retry',
      'COLUMN', N'retry_count'
 GO
 
 EXEC sp_addextendedproperty
      'MS_Description', N'重试状态 0、重试中 1、成功 2、最大重试次数',
      'SCHEMA', N'dbo',
-     'TABLE', N'sj_retry_task_0',
+     'TABLE', N'sj_retry',
      'COLUMN', N'retry_status'
 GO
 
 EXEC sp_addextendedproperty
      'MS_Description', N'任务类型 1、重试数据 2、回调数据',
      'SCHEMA', N'dbo',
-     'TABLE', N'sj_retry_task_0',
+     'TABLE', N'sj_retry',
      'COLUMN', N'task_type'
+GO
+
+EXEC sp_addextendedproperty
+     'MS_Description', N'bucket',
+     'SCHEMA', N'dbo',
+     'TABLE', N'sj_retry',
+     'COLUMN', N'bucket_index'
+GO
+
+EXEC sp_addextendedproperty
+     'MS_Description', N'父节点id',
+     'SCHEMA', N'dbo',
+     'TABLE', N'sj_retry',
+     'COLUMN', N'parent_id'
+GO
+
+EXEC sp_addextendedproperty
+     'MS_Description', N'逻辑删除',
+     'SCHEMA', N'dbo',
+     'TABLE', N'sj_retry',
+     'COLUMN', N'deleted'
 GO
 
 EXEC sp_addextendedproperty
      'MS_Description', N'创建时间',
      'SCHEMA', N'dbo',
-     'TABLE', N'sj_retry_task_0',
+     'TABLE', N'sj_retry',
      'COLUMN', N'create_dt'
 GO
 
 EXEC sp_addextendedproperty
      'MS_Description', N'修改时间',
      'SCHEMA', N'dbo',
-     'TABLE', N'sj_retry_task_0',
+     'TABLE', N'sj_retry',
      'COLUMN', N'update_dt'
 GO
 
 EXEC sp_addextendedproperty
-     'MS_Description', N'任务表',
+     'MS_Description', N'重试信息表',
      'SCHEMA', N'dbo',
-     'TABLE', N'sj_retry_task_0'
+     'TABLE', N'sj_retry'
 GO
 
--- sj_retry_task_log
-CREATE TABLE sj_retry_task_log
+-- sj_retry_task
+CREATE TABLE sj_retry_task
 (
-    id            bigint        NOT NULL PRIMARY KEY IDENTITY,
-    namespace_id  nvarchar(64)  NOT NULL DEFAULT '764d604ec6fc45f68cd92514c40e9e1a',
-    unique_id     nvarchar(64)  NOT NULL,
-    group_name    nvarchar(64)  NOT NULL,
-    scene_name    nvarchar(64)  NOT NULL,
-    idempotent_id nvarchar(64)  NOT NULL,
-    biz_no        nvarchar(64)  NOT NULL DEFAULT '',
-    executor_name nvarchar(512) NOT NULL DEFAULT '',
-    args_str      nvarchar(max) NOT NULL,
-    ext_attrs     nvarchar(max) NOT NULL,
-    retry_status  tinyint       NOT NULL DEFAULT 0,
-    task_type     tinyint       NOT NULL DEFAULT 1,
-    create_dt     datetime2     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    update_dt     datetime2     NOT NULL DEFAULT CURRENT_TIMESTAMP
+    id               bigint        NOT NULL PRIMARY KEY IDENTITY,
+    namespace_id     nvarchar(64)  NOT NULL DEFAULT '764d604ec6fc45f68cd92514c40e9e1a',
+    group_name       nvarchar(64)  NOT NULL,
+    scene_name       nvarchar(64)  NOT NULL,
+    retry_id         bigint        NOT NULL,
+    ext_attrs        nvarchar(max) NOT NULL,
+    task_status      tinyint       NOT NULL DEFAULT 1,
+    task_type        tinyint       NOT NULL DEFAULT 1,
+    operation_reason tinyint       NOT NULL DEFAULT 0,
+    client_info      nvarchar(128) NULL     DEFAULT NULL,
+    create_dt        datetime2     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    update_dt        datetime2     NOT NULL DEFAULT CURRENT_TIMESTAMP
 )
 GO
 
-CREATE INDEX idx_sj_retry_task_log_01 ON sj_retry_task_log (namespace_id, group_name, scene_name)
+CREATE INDEX idx_sj_retry_task_01 ON sj_retry_task (namespace_id, group_name, scene_name)
 GO
-CREATE INDEX idx_sj_retry_task_log_02 ON sj_retry_task_log (retry_status)
+CREATE INDEX idx_sj_retry_task_02 ON sj_retry_task (task_status)
 GO
-CREATE INDEX idx_sj_retry_task_log_03 ON sj_retry_task_log (idempotent_id)
+CREATE INDEX idx_sj_retry_task_03 ON sj_retry_task (create_dt)
 GO
-CREATE INDEX idx_sj_retry_task_log_04 ON sj_retry_task_log (unique_id)
-GO
-CREATE INDEX idx_sj_retry_task_log_05 ON sj_retry_task_log (biz_no)
-GO
-CREATE INDEX idx_sj_retry_task_log_06 ON sj_retry_task_log (create_dt)
+CREATE INDEX idx_sj_retry_task_04 ON sj_retry_task (retry_id)
 GO
 
 EXEC sp_addextendedproperty
      'MS_Description', N'主键',
      'SCHEMA', N'dbo',
-     'TABLE', N'sj_retry_task_log',
+     'TABLE', N'sj_retry_task',
      'COLUMN', N'id'
 GO
 
 EXEC sp_addextendedproperty
      'MS_Description', N'命名空间id',
      'SCHEMA', N'dbo',
-     'TABLE', N'sj_retry_task_log',
+     'TABLE', N'sj_retry_task',
      'COLUMN', N'namespace_id'
-GO
-
-EXEC sp_addextendedproperty
-     'MS_Description', N'同组下id唯一',
-     'SCHEMA', N'dbo',
-     'TABLE', N'sj_retry_task_log',
-     'COLUMN', N'unique_id'
 GO
 
 EXEC sp_addextendedproperty
      'MS_Description', N'组名称',
      'SCHEMA', N'dbo',
-     'TABLE', N'sj_retry_task_log',
+     'TABLE', N'sj_retry_task',
      'COLUMN', N'group_name'
 GO
 
 EXEC sp_addextendedproperty
      'MS_Description', N'场景名称',
      'SCHEMA', N'dbo',
-     'TABLE', N'sj_retry_task_log',
+     'TABLE', N'sj_retry_task',
      'COLUMN', N'scene_name'
 GO
 
 EXEC sp_addextendedproperty
-     'MS_Description', N'幂等id',
+     'MS_Description', N'重试信息Id',
      'SCHEMA', N'dbo',
-     'TABLE', N'sj_retry_task_log',
-     'COLUMN', N'idempotent_id'
-GO
-
-EXEC sp_addextendedproperty
-     'MS_Description', N'业务编号',
-     'SCHEMA', N'dbo',
-     'TABLE', N'sj_retry_task_log',
-     'COLUMN', N'biz_no'
-GO
-
-EXEC sp_addextendedproperty
-     'MS_Description', N'执行器名称',
-     'SCHEMA', N'dbo',
-     'TABLE', N'sj_retry_task_log',
-     'COLUMN', N'executor_name'
-GO
-
-EXEC sp_addextendedproperty
-     'MS_Description', N'执行方法参数',
-     'SCHEMA', N'dbo',
-     'TABLE', N'sj_retry_task_log',
-     'COLUMN', N'args_str'
+     'TABLE', N'sj_retry_task',
+     'COLUMN', N'retry_id'
 GO
 
 EXEC sp_addextendedproperty
      'MS_Description', N'扩展字段',
      'SCHEMA', N'dbo',
-     'TABLE', N'sj_retry_task_log',
+     'TABLE', N'sj_retry_task',
      'COLUMN', N'ext_attrs'
 GO
 
 EXEC sp_addextendedproperty
-     'MS_Description', N'重试状态 0、重试中 1、成功 2、最大次数',
+     'MS_Description', N'重试状态',
      'SCHEMA', N'dbo',
-     'TABLE', N'sj_retry_task_log',
-     'COLUMN', N'retry_status'
+     'TABLE', N'sj_retry_task',
+     'COLUMN', N'task_status'
 GO
 
 EXEC sp_addextendedproperty
      'MS_Description', N'任务类型 1、重试数据 2、回调数据',
      'SCHEMA', N'dbo',
-     'TABLE', N'sj_retry_task_log',
+     'TABLE', N'sj_retry_task',
      'COLUMN', N'task_type'
+GO
+
+EXEC sp_addextendedproperty
+     'MS_Description', N'操作原因',
+     'SCHEMA', N'dbo',
+     'TABLE', N'sj_retry_task',
+     'COLUMN', N'operation_reason'
+GO
+
+EXEC sp_addextendedproperty
+     'MS_Description', N'客户端地址 clientId#ip:port',
+     'SCHEMA', N'dbo',
+     'TABLE', N'sj_retry_task',
+     'COLUMN', N'client_info'
 GO
 
 EXEC sp_addextendedproperty
      'MS_Description', N'创建时间',
      'SCHEMA', N'dbo',
-     'TABLE', N'sj_retry_task_log',
+     'TABLE', N'sj_retry_task',
      'COLUMN', N'create_dt'
 GO
 
 EXEC sp_addextendedproperty
      'MS_Description', N'修改时间',
      'SCHEMA', N'dbo',
-     'TABLE', N'sj_retry_task_log',
+     'TABLE', N'sj_retry_task',
      'COLUMN', N'update_dt'
 GO
 
 EXEC sp_addextendedproperty
-     'MS_Description', N'任务日志基础信息表',
+     'MS_Description', N'重试任务表',
      'SCHEMA', N'dbo',
-     'TABLE', N'sj_retry_task_log'
+     'TABLE', N'sj_retry_task'
 GO
 
 -- sj_retry_task_log_message
 CREATE TABLE sj_retry_task_log_message
 (
-    id           bigint        NOT NULL PRIMARY KEY IDENTITY,
-    namespace_id nvarchar(64)  NOT NULL DEFAULT '764d604ec6fc45f68cd92514c40e9e1a',
-    group_name   nvarchar(64)  NOT NULL,
-    unique_id    nvarchar(64)  NOT NULL,
-    message      nvarchar(max) NOT NULL,
-    log_num      int           NOT NULL DEFAULT 1,
-    real_time    bigint        NOT NULL DEFAULT 0,
-    create_dt    datetime2     NOT NULL DEFAULT CURRENT_TIMESTAMP
+    id            bigint        NOT NULL PRIMARY KEY IDENTITY,
+    namespace_id  nvarchar(64)  NOT NULL DEFAULT '764d604ec6fc45f68cd92514c40e9e1a',
+    group_name    nvarchar(64)  NOT NULL,
+    retry_id      bigint        NOT NULL,
+    retry_task_id bigint        NOT NULL,
+    message       nvarchar(max) NOT NULL,
+    log_num       int           NOT NULL DEFAULT 1,
+    real_time     bigint        NOT NULL DEFAULT 0,
+    create_dt     datetime2     NOT NULL DEFAULT CURRENT_TIMESTAMP
 )
 GO
 
-CREATE INDEX idx_sj_retry_task_log_message_01 ON sj_retry_task_log_message (namespace_id, group_name, unique_id)
+CREATE INDEX idx_sj_retry_task_log_message_01 ON sj_retry_task_log_message (namespace_id, group_name, retry_task_id)
 GO
 CREATE INDEX idx_sj_retry_task_log_message_02 ON sj_retry_task_log_message (create_dt)
 GO
@@ -866,10 +882,17 @@ EXEC sp_addextendedproperty
 GO
 
 EXEC sp_addextendedproperty
-     'MS_Description', N'同组下id唯一',
+     'MS_Description', N'重试信息Id',
      'SCHEMA', N'dbo',
      'TABLE', N'sj_retry_task_log_message',
-     'COLUMN', N'unique_id'
+     'COLUMN', N'retry_id'
+GO
+
+EXEC sp_addextendedproperty
+     'MS_Description', N'重试任务Id',
+     'SCHEMA', N'dbo',
+     'TABLE', N'sj_retry_task_log_message',
+     'COLUMN', N'retry_task_id'
 GO
 
 EXEC sp_addextendedproperty
@@ -909,20 +932,28 @@ GO
 -- sj_retry_scene_config
 CREATE TABLE sj_retry_scene_config
 (
-    id               bigint        NOT NULL PRIMARY KEY IDENTITY,
-    namespace_id     nvarchar(64)  NOT NULL DEFAULT '764d604ec6fc45f68cd92514c40e9e1a',
-    scene_name       nvarchar(64)  NOT NULL,
-    group_name       nvarchar(64)  NOT NULL,
-    scene_status     tinyint       NOT NULL DEFAULT 0,
-    max_retry_count  int           NOT NULL DEFAULT 5,
-    back_off         tinyint       NOT NULL DEFAULT 1,
-    trigger_interval nvarchar(16)  NOT NULL DEFAULT '',
-    deadline_request bigint        NOT NULL DEFAULT 60000,
-    executor_timeout int           NOT NULL DEFAULT 5,
-    route_key        tinyint       NOT NULL DEFAULT 4,
-    description      nvarchar(256) NOT NULL DEFAULT '',
-    create_dt        datetime2     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    update_dt        datetime2     NOT NULL DEFAULT CURRENT_TIMESTAMP
+    id                  bigint        NOT NULL PRIMARY KEY IDENTITY,
+    namespace_id        nvarchar(64)  NOT NULL DEFAULT '764d604ec6fc45f68cd92514c40e9e1a',
+    scene_name          nvarchar(64)  NOT NULL,
+    group_name          nvarchar(64)  NOT NULL,
+    scene_status        tinyint       NOT NULL DEFAULT 0,
+    max_retry_count     int           NOT NULL DEFAULT 5,
+    back_off            tinyint       NOT NULL DEFAULT 1,
+    trigger_interval    nvarchar(16)  NOT NULL DEFAULT '',
+    notify_ids          nvarchar(128) NOT NULL DEFAULT '',
+    deadline_request    bigint        NOT NULL DEFAULT 60000,
+    executor_timeout    int           NOT NULL DEFAULT 5,
+    route_key           tinyint       NOT NULL DEFAULT 4,
+    block_strategy      tinyint       NOT NULL DEFAULT 1,
+    cb_status           tinyint       NOT NULL DEFAULT 0,
+    cb_trigger_type     tinyint       NOT NULL DEFAULT 1,
+    cb_max_count        int           NOT NULL DEFAULT 16,
+    cb_trigger_interval nvarchar(16)  NOT NULL DEFAULT '',
+    owner_id            bigint        NULL     DEFAULT NULL,
+    labels              nvarchar(512) NULL     DEFAULT '',
+    description         nvarchar(256) NOT NULL DEFAULT '',
+    create_dt           datetime2     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    update_dt           datetime2     NOT NULL DEFAULT CURRENT_TIMESTAMP
 )
 GO
 
@@ -986,6 +1017,13 @@ EXEC sp_addextendedproperty
 GO
 
 EXEC sp_addextendedproperty
+     'MS_Description', N'通知告警场景配置id列表',
+     'SCHEMA', N'dbo',
+     'TABLE', N'sj_retry_scene_config',
+     'COLUMN', N'notify_ids'
+GO
+
+EXEC sp_addextendedproperty
      'MS_Description', N'Deadline Request 调用链超时 单位毫秒',
      'SCHEMA', N'dbo',
      'TABLE', N'sj_retry_scene_config',
@@ -1004,6 +1042,55 @@ EXEC sp_addextendedproperty
      'SCHEMA', N'dbo',
      'TABLE', N'sj_retry_scene_config',
      'COLUMN', N'route_key'
+GO
+
+EXEC sp_addextendedproperty
+     'MS_Description', N'阻塞策略 1、丢弃 2、覆盖 3、并行',
+     'SCHEMA', N'dbo',
+     'TABLE', N'sj_retry_scene_config',
+     'COLUMN', N'block_strategy'
+GO
+
+EXEC sp_addextendedproperty
+     'MS_Description', N'回调状态 0、不开启 1、开启',
+     'SCHEMA', N'dbo',
+     'TABLE', N'sj_retry_scene_config',
+     'COLUMN', N'cb_status'
+GO
+
+EXEC sp_addextendedproperty
+     'MS_Description', N'1、默认等级 2、固定间隔时间 3、CRON 表达式',
+     'SCHEMA', N'dbo',
+     'TABLE', N'sj_retry_scene_config',
+     'COLUMN', N'cb_trigger_type'
+GO
+
+EXEC sp_addextendedproperty
+     'MS_Description', N'回调的最大执行次数',
+     'SCHEMA', N'dbo',
+     'TABLE', N'sj_retry_scene_config',
+     'COLUMN', N'cb_max_count'
+GO
+
+EXEC sp_addextendedproperty
+     'MS_Description', N'回调的最大执行次数',
+     'SCHEMA', N'dbo',
+     'TABLE', N'sj_retry_scene_config',
+     'COLUMN', N'cb_trigger_interval'
+GO
+
+EXEC sp_addextendedproperty
+     'MS_Description', N'负责人id',
+     'SCHEMA', N'dbo',
+     'TABLE', N'sj_retry_scene_config',
+     'COLUMN', N'owner_id'
+GO
+
+EXEC sp_addextendedproperty
+     'MS_Description', N'标签',
+     'SCHEMA', N'dbo',
+     'TABLE', N'sj_retry_scene_config',
+     'COLUMN', N'labels'
 GO
 
 EXEC sp_addextendedproperty
@@ -1045,6 +1132,7 @@ CREATE TABLE sj_server_node
     expire_at    datetime2     NOT NULL,
     node_type    tinyint       NOT NULL,
     ext_attrs    nvarchar(256) NULL     DEFAULT '',
+    labels       nvarchar(512) NULL     DEFAULT '',
     create_dt    datetime2     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     update_dt    datetime2     NOT NULL DEFAULT CURRENT_TIMESTAMP
 )
@@ -1119,6 +1207,13 @@ EXEC sp_addextendedproperty
      'SCHEMA', N'dbo',
      'TABLE', N'sj_server_node',
      'COLUMN', N'ext_attrs'
+GO
+
+EXEC sp_addextendedproperty
+     'MS_Description', N'标签',
+     'SCHEMA', N'dbo',
+     'TABLE', N'sj_server_node',
+     'COLUMN', N'labels'
 GO
 
 EXEC sp_addextendedproperty
@@ -1261,8 +1356,8 @@ EXEC sp_addextendedproperty
      'TABLE', N'sj_system_user'
 GO
 
--- pwd: admin
-INSERT INTO sj_system_user(username, password, role, create_dt, update_dt) VALUES (N'admin', N'465c194afb65670f38322df087f0a9bb225cc257e43eb4ac5a0c98ef5b3173ac', N'2', getdate(), getdate())
+INSERT INTO sj_system_user (username, password, role)
+VALUES (N'admin', N'465c194afb65670f38322df087f0a9bb225cc257e43eb4ac5a0c98ef5b3173ac', 2)
 GO
 
 -- sj_system_user_permission
@@ -1328,69 +1423,6 @@ EXEC sp_addextendedproperty
      'TABLE', N'sj_system_user_permission'
 GO
 
--- sj_sequence_alloc
-CREATE TABLE sj_sequence_alloc
-(
-    id           bigint       NOT NULL PRIMARY KEY IDENTITY,
-    namespace_id nvarchar(64) NOT NULL DEFAULT '764d604ec6fc45f68cd92514c40e9e1a',
-    group_name   nvarchar(64) NOT NULL DEFAULT '',
-    max_id       bigint       NOT NULL DEFAULT 1,
-    step         int          NOT NULL DEFAULT 100,
-    update_dt    datetime2    NOT NULL DEFAULT CURRENT_TIMESTAMP
-)
-GO
-
-CREATE UNIQUE INDEX uk_sj_sequence_alloc_01 ON sj_sequence_alloc (namespace_id, group_name)
-GO
-
-EXEC sp_addextendedproperty
-     'MS_Description', N'主键',
-     'SCHEMA', N'dbo',
-     'TABLE', N'sj_sequence_alloc',
-     'COLUMN', N'id'
-GO
-
-EXEC sp_addextendedproperty
-     'MS_Description', N'命名空间id',
-     'SCHEMA', N'dbo',
-     'TABLE', N'sj_sequence_alloc',
-     'COLUMN', N'namespace_id'
-GO
-
-EXEC sp_addextendedproperty
-     'MS_Description', N'组名称',
-     'SCHEMA', N'dbo',
-     'TABLE', N'sj_sequence_alloc',
-     'COLUMN', N'group_name'
-GO
-
-EXEC sp_addextendedproperty
-     'MS_Description', N'最大id',
-     'SCHEMA', N'dbo',
-     'TABLE', N'sj_sequence_alloc',
-     'COLUMN', N'max_id'
-GO
-
-EXEC sp_addextendedproperty
-     'MS_Description', N'步长',
-     'SCHEMA', N'dbo',
-     'TABLE', N'sj_sequence_alloc',
-     'COLUMN', N'step'
-GO
-
-EXEC sp_addextendedproperty
-     'MS_Description', N'更新时间',
-     'SCHEMA', N'dbo',
-     'TABLE', N'sj_sequence_alloc',
-     'COLUMN', N'update_dt'
-GO
-
-EXEC sp_addextendedproperty
-     'MS_Description', N'号段模式序号ID分配表',
-     'SCHEMA', N'dbo',
-     'TABLE', N'sj_sequence_alloc'
-GO
-
 -- sj_job
 CREATE TABLE sj_job
 (
@@ -1415,6 +1447,9 @@ CREATE TABLE sj_job
     retry_interval   int           NOT NULL DEFAULT 0,
     bucket_index     int           NOT NULL DEFAULT 0,
     resident         tinyint       NOT NULL DEFAULT 0,
+    notify_ids       nvarchar(128) NOT NULL DEFAULT '',
+    owner_id         bigint        NULL     DEFAULT NULL,
+    labels           nvarchar(512) NULL     DEFAULT '',
     description      nvarchar(256) NOT NULL DEFAULT '',
     ext_attrs        nvarchar(256) NULL     DEFAULT '',
     deleted          tinyint       NOT NULL DEFAULT 0,
@@ -1529,7 +1564,7 @@ EXEC sp_addextendedproperty
 GO
 
 EXEC sp_addextendedproperty
-     'MS_Description', N'阻塞策略 1、丢弃 2、覆盖 3、并行',
+     'MS_Description', N'阻塞策略 1、丢弃 2、覆盖 3、并行 4、恢复',
      'SCHEMA', N'dbo',
      'TABLE', N'sj_job',
      'COLUMN', N'block_strategy'
@@ -1557,7 +1592,7 @@ EXEC sp_addextendedproperty
 GO
 
 EXEC sp_addextendedproperty
-     'MS_Description', N'重试间隔 ( s ) ',
+     'MS_Description', N'重试间隔 ( s)',
      'SCHEMA', N'dbo',
      'TABLE', N'sj_job',
      'COLUMN', N'retry_interval'
@@ -1575,6 +1610,27 @@ EXEC sp_addextendedproperty
      'SCHEMA', N'dbo',
      'TABLE', N'sj_job',
      'COLUMN', N'resident'
+GO
+
+EXEC sp_addextendedproperty
+     'MS_Description', N'通知告警场景配置id列表',
+     'SCHEMA', N'dbo',
+     'TABLE', N'sj_job',
+     'COLUMN', N'notify_ids'
+GO
+
+EXEC sp_addextendedproperty
+     'MS_Description', N'负责人id',
+     'SCHEMA', N'dbo',
+     'TABLE', N'sj_job',
+     'COLUMN', N'owner_id'
+GO
+
+EXEC sp_addextendedproperty
+     'MS_Description', N'标签',
+     'SCHEMA', N'dbo',
+     'TABLE', N'sj_job',
+     'COLUMN', N'labels'
 GO
 
 EXEC sp_addextendedproperty
@@ -1618,7 +1674,7 @@ EXEC sp_addextendedproperty
      'TABLE', N'sj_job'
 GO
 
-INSERT INTO sj_job (namespace_id, group_name, job_name, args_str, args_type, next_trigger_at, job_status, task_type, route_key, executor_type, executor_info, trigger_type, trigger_interval, block_strategy,executor_timeout, max_retry_times, parallel_num, retry_interval, bucket_index, resident, description, ext_attrs, deleted, create_dt, update_dt) VALUES (N'dev', N'ruoyi_group', N'demo-job', null, 1, 1710344035622, 1, 1, 4, 1, N'testJobExecutor', 2, N'60', 1, 60, 3, 1, 1, 116, 0, N'', N'', 0, getdate(), getdate())
+INSERT INTO sj_job (namespace_id, group_name, job_name, args_str, args_type, next_trigger_at, job_status, task_type, route_key, executor_type, executor_info, trigger_type, trigger_interval, block_strategy,executor_timeout, max_retry_times, parallel_num, retry_interval, bucket_index, resident, notify_ids, owner_id, labels, description, ext_attrs, deleted, create_dt, update_dt) VALUES (N'dev', N'ruoyi_group', N'demo-job', null, 1, 1710344035622, 1, 1, 4, 1, N'testJobExecutor', 2, N'60', 1, 60, 3, 1, 1, 116, 0, N'', 1, N'', N'', N'', 0, getdate(), getdate())
 GO
 
 -- sj_job_log_message
@@ -2097,7 +2153,7 @@ EXEC sp_addextendedproperty
 GO
 
 EXEC sp_addextendedproperty
-     'MS_Description', N'业务id  ( job_id或workflow_id ) ',
+     'MS_Description', N'业务id  ( job_id或workflow_id)',
      'SCHEMA', N'dbo',
      'TABLE', N'sj_job_summary',
      'COLUMN', N'business_id'
@@ -2308,8 +2364,10 @@ CREATE TABLE sj_workflow
     description      nvarchar(256) NOT NULL DEFAULT '',
     flow_info        nvarchar(max) NULL     DEFAULT NULL,
     wf_context       nvarchar(max) NULL     DEFAULT NULL,
+    notify_ids       nvarchar(128) NOT NULL DEFAULT '',
     bucket_index     int           NOT NULL DEFAULT 0,
     version          int           NOT NULL,
+    owner_id         bigint        NULL     DEFAULT NULL,
     ext_attrs        nvarchar(256) NULL     DEFAULT '',
     deleted          tinyint       NOT NULL DEFAULT 0,
     create_dt        datetime2     NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -2414,6 +2472,13 @@ EXEC sp_addextendedproperty
 GO
 
 EXEC sp_addextendedproperty
+     'MS_Description', N'通知告警场景配置id列表',
+     'SCHEMA', N'dbo',
+     'TABLE', N'sj_workflow',
+     'COLUMN', N'notify_ids'
+GO
+
+EXEC sp_addextendedproperty
      'MS_Description', N'bucket',
      'SCHEMA', N'dbo',
      'TABLE', N'sj_workflow',
@@ -2425,6 +2490,13 @@ EXEC sp_addextendedproperty
      'SCHEMA', N'dbo',
      'TABLE', N'sj_workflow',
      'COLUMN', N'version'
+GO
+
+EXEC sp_addextendedproperty
+     'MS_Description', N'负责人id',
+     'SCHEMA', N'dbo',
+     'TABLE', N'sj_workflow',
+     'COLUMN', N'owner_id'
 GO
 
 EXEC sp_addextendedproperty
@@ -2745,3 +2817,75 @@ EXEC sp_addextendedproperty
      'TABLE', N'sj_workflow_task_batch'
 GO
 
+-- sj_job_executor
+CREATE TABLE sj_job_executor
+(
+    id            bigint        NOT NULL PRIMARY KEY IDENTITY,
+    namespace_id  nvarchar(64)  NOT NULL DEFAULT '764d604ec6fc45f68cd92514c40e9e1a',
+    group_name    nvarchar(64)  NOT NULL,
+    executor_info nvarchar(256) NOT NULL,
+    executor_type nvarchar(3)   NOT NULL,
+    create_dt     datetime2     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    update_dt     datetime2     NOT NULL DEFAULT CURRENT_TIMESTAMP
+)
+GO
+
+CREATE INDEX idx_sj_job_executor_01 ON sj_job_executor (namespace_id, group_name)
+GO
+CREATE INDEX idx_sj_job_executor_02 ON sj_job_executor (create_dt)
+GO
+
+EXEC sp_addextendedproperty
+     'MS_Description', N'主键',
+     'SCHEMA', N'dbo',
+     'TABLE', N'sj_job_executor',
+     'COLUMN', N'id'
+GO
+
+EXEC sp_addextendedproperty
+     'MS_Description', N'命名空间id',
+     'SCHEMA', N'dbo',
+     'TABLE', N'sj_job_executor',
+     'COLUMN', N'namespace_id'
+GO
+
+EXEC sp_addextendedproperty
+     'MS_Description', N'组名称',
+     'SCHEMA', N'dbo',
+     'TABLE', N'sj_job_executor',
+     'COLUMN', N'group_name'
+GO
+
+EXEC sp_addextendedproperty
+     'MS_Description', N'任务执行器名称',
+     'SCHEMA', N'dbo',
+     'TABLE', N'sj_job_executor',
+     'COLUMN', N'executor_info'
+GO
+
+EXEC sp_addextendedproperty
+     'MS_Description', N'1:java 2:python 3:go',
+     'SCHEMA', N'dbo',
+     'TABLE', N'sj_job_executor',
+     'COLUMN', N'executor_type'
+GO
+
+EXEC sp_addextendedproperty
+     'MS_Description', N'创建时间',
+     'SCHEMA', N'dbo',
+     'TABLE', N'sj_job_executor',
+     'COLUMN', N'create_dt'
+GO
+
+EXEC sp_addextendedproperty
+     'MS_Description', N'修改时间',
+     'SCHEMA', N'dbo',
+     'TABLE', N'sj_job_executor',
+     'COLUMN', N'update_dt'
+GO
+
+EXEC sp_addextendedproperty
+     'MS_Description', N'任务执行器信息',
+     'SCHEMA', N'dbo',
+     'TABLE', N'sj_job_executor'
+GO

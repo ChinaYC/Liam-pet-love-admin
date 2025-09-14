@@ -9,7 +9,6 @@ import com.baomidou.dynamic.datasource.annotation.DSTransactional;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.incrementer.IdentifierGenerator;
-import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.RequiredArgsConstructor;
@@ -63,7 +62,7 @@ public class GenTableServiceImpl implements IGenTableService {
     private final GenTableColumnMapper genTableColumnMapper;
     private final IdentifierGenerator identifierGenerator;
 
-    private static final String[] TABLE_IGNORE = new String[]{"sj_", "act_", "flw_", "gen_"};
+    private static final String[] TABLE_IGNORE = new String[]{"sj_", "flow_", "gen_"};
 
     /**
      * 查询业务字段列表
@@ -137,7 +136,7 @@ public class GenTableServiceImpl implements IGenTableService {
         }
         // 过滤并转换表格数据
         List<GenTable> tables = tablesMap.values().stream()
-            .filter(x -> !startWithAnyIgnoreCase(x.getName(), TABLE_IGNORE))
+            .filter(x -> !StringUtils.startWithAnyIgnoreCase(x.getName(), TABLE_IGNORE))
             .filter(x -> {
                 if (CollUtil.isEmpty(tableNames)) {
                     return true;
@@ -162,27 +161,13 @@ public class GenTableServiceImpl implements IGenTableService {
                 GenTable gen = new GenTable();
                 gen.setTableName(x.getName());
                 gen.setTableComment(x.getComment());
-                gen.setCreateTime(x.getCreateTime());
+                // postgresql的表元数据没有创建时间这个东西(好奇葩) 只能new Date代替
+                gen.setCreateTime(ObjectUtil.defaultIfNull(x.getCreateTime(), new Date()));
                 gen.setUpdateTime(x.getUpdateTime());
                 return gen;
             }).sorted(Comparator.comparing(GenTable::getCreateTime).reversed())
             .toList();
-
-        IPage<GenTable> page = pageQuery.build();
-        page.setTotal(tables.size());
-        // 手动分页 set数据
-        page.setRecords(CollUtil.page((int) page.getCurrent() - 1, (int) page.getSize(), tables));
-        return TableDataInfo.build(page);
-    }
-
-    public static boolean startWithAnyIgnoreCase(CharSequence cs, CharSequence... searchCharSequences) {
-        // 判断是否是以指定字符串开头
-        for (CharSequence searchCharSequence : searchCharSequences) {
-            if (StringUtils.startsWithIgnoreCase(cs, searchCharSequence)) {
-                return true;
-            }
-        }
-        return false;
+        return TableDataInfo.build(tables, pageQuery.build());
     }
 
     /**
@@ -203,7 +188,7 @@ public class GenTableServiceImpl implements IGenTableService {
         }
 
         List<Table<?>> tableList = tablesMap.values().stream()
-            .filter(x -> !startWithAnyIgnoreCase(x.getName(), TABLE_IGNORE))
+            .filter(x -> !StringUtils.startWithAnyIgnoreCase(x.getName(), TABLE_IGNORE))
             .filter(x -> tableNameSet.contains(x.getName())).toList();
 
         if (CollUtil.isEmpty(tableList)) {
@@ -312,13 +297,13 @@ public class GenTableServiceImpl implements IGenTableService {
         List<GenTableColumn> tableColumns = new ArrayList<>();
         columns.forEach((columnName, column) -> {
             GenTableColumn tableColumn = new GenTableColumn();
-            tableColumn.setIsPk(String.valueOf(column.isPrimaryKey()));
+            tableColumn.setIsPk(column.isPrimaryKey() ? "1" : "0");
             tableColumn.setColumnName(column.getName());
             tableColumn.setColumnComment(column.getComment());
             tableColumn.setColumnType(column.getOriginType().toLowerCase());
             tableColumn.setSort(column.getPosition());
-            tableColumn.setIsRequired(column.isNullable() == 0 ? "1" : "0");
-            tableColumn.setIsIncrement(column.isAutoIncrement() == -1 ? "0" : "1");
+            tableColumn.setIsRequired(column.isNullable() ? "0" : "1");
+            tableColumn.setIsIncrement(column.isAutoIncrement() ? "1" : "0");
             tableColumns.add(tableColumn);
         });
         return tableColumns;

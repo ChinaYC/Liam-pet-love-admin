@@ -1,8 +1,8 @@
 package org.dromara.common.satoken.utils;
 
 import cn.dev33.satoken.session.SaSession;
-import cn.dev33.satoken.stp.SaLoginModel;
 import cn.dev33.satoken.stp.StpUtil;
+import cn.dev33.satoken.stp.parameter.SaLoginParameter;
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.convert.Convert;
 import cn.hutool.core.util.ObjectUtil;
@@ -14,6 +14,7 @@ import org.dromara.common.core.domain.model.LoginUser;
 import org.dromara.common.core.enums.UserType;
 
 import java.util.Set;
+
 
 /**
  * 登录鉴权助手
@@ -46,8 +47,8 @@ public class LoginHelper {
      * @param loginUser 登录用户信息
      * @param model     配置参数
      */
-    public static void login(LoginUser loginUser, SaLoginModel model) {
-        model = ObjectUtil.defaultIfNull(model, new SaLoginModel());
+    public static void login(LoginUser loginUser, SaLoginParameter model) {
+        model = ObjectUtil.defaultIfNull(model, new SaLoginParameter());
         StpUtil.login(loginUser.getLoginId(),
             model.setExtra(TENANT_KEY, loginUser.getTenantId())
                 .setExtra(USER_KEY, loginUser.getUserId())
@@ -62,23 +63,25 @@ public class LoginHelper {
     /**
      * 获取用户(多级缓存)
      */
-    public static LoginUser getLoginUser() {
+    @SuppressWarnings("unchecked cast")
+    public static <T extends LoginUser> T getLoginUser() {
         SaSession session = StpUtil.getTokenSession();
         if (ObjectUtil.isNull(session)) {
             return null;
         }
-        return (LoginUser) session.get(LOGIN_USER_KEY);
+        return (T) session.get(LOGIN_USER_KEY);
     }
 
     /**
      * 获取用户基于token
      */
-    public static LoginUser getLoginUser(String token) {
+    @SuppressWarnings("unchecked cast")
+    public static <T extends LoginUser> T getLoginUser(String token) {
         SaSession session = StpUtil.getTokenSessionByToken(token);
         if (ObjectUtil.isNull(session)) {
             return null;
         }
-        return (LoginUser) session.get(LOGIN_USER_KEY);
+        return (T) session.get(LOGIN_USER_KEY);
     }
 
     /**
@@ -86,6 +89,13 @@ public class LoginHelper {
      */
     public static Long getUserId() {
         return Convert.toLong(getExtra(USER_KEY));
+    }
+
+    /**
+     * 获取用户id
+     */
+    public static String getUserIdStr() {
+        return Convert.toStr(getExtra(USER_KEY));
     }
 
     /**
@@ -183,7 +193,11 @@ public class LoginHelper {
      * @return 结果
      */
     public static boolean isTenantAdmin() {
-        return Convert.toBool(isTenantAdmin(getLoginUser().getRolePermission()));
+        LoginUser loginUser = getLoginUser();
+        if (loginUser == null) {
+            return false;
+        }
+        return Convert.toBool(isTenantAdmin(loginUser.getRolePermission()));
     }
 
     /**
@@ -193,7 +207,8 @@ public class LoginHelper {
      */
     public static boolean isLogin() {
         try {
-            return getLoginUser() != null;
+            StpUtil.checkLogin();
+            return true;
         } catch (Exception e) {
             return false;
         }

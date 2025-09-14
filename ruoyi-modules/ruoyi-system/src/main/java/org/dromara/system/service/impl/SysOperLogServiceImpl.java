@@ -49,12 +49,18 @@ public class SysOperLogServiceImpl implements ISysOperLogService {
         insertOperlog(operLog);
     }
 
+    /**
+     * 分页查询操作日志列表
+     *
+     * @param operLog   查询条件
+     * @param pageQuery 分页参数
+     * @return 操作日志分页列表
+     */
     @Override
     public TableDataInfo<SysOperLogVo> selectPageOperLogList(SysOperLogBo operLog, PageQuery pageQuery) {
         LambdaQueryWrapper<SysOperLog> lqw = buildQueryWrapper(operLog);
         if (StringUtils.isBlank(pageQuery.getOrderByColumn())) {
-            pageQuery.setOrderByColumn("oper_id");
-            pageQuery.setIsAsc("desc");
+            lqw.orderByDesc(SysOperLog::getOperId);
         }
         Page<SysOperLogVo> page = baseMapper.selectVoPage(pageQuery.build(), lqw);
         return TableDataInfo.build(page);

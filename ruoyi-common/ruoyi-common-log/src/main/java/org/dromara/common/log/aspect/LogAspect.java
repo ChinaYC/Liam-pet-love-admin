@@ -27,9 +27,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.validation.BindingResult;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.util.Collection;
-import java.util.Map;
-import java.util.StringJoiner;
+import java.util.*;
 
 /**
  * 操作日志记录处理
@@ -113,13 +111,12 @@ public class LogAspect {
             // 设置消耗时间
             StopWatch stopWatch = KEY_CACHE.get();
             stopWatch.stop();
-            operLog.setCostTime(stopWatch.getTime());
+            operLog.setCostTime(stopWatch.getDuration().toMillis());
             // 发布事件保存数据库
             SpringUtils.context().publishEvent(operLog);
         } catch (Exception exp) {
             // 记录本地异常日志
             log.error("异常信息:{}", exp.getMessage());
-            exp.printStackTrace();
         } finally {
             KEY_CACHE.remove();
         }
@@ -177,14 +174,28 @@ public class LogAspect {
         if (ArrayUtil.isEmpty(paramsArray)) {
             return params.toString();
         }
+        String[] exclude = ArrayUtil.addAll(excludeParamNames, EXCLUDE_PROPERTIES);
         for (Object o : paramsArray) {
             if (ObjectUtil.isNotNull(o) && !isFilterObject(o)) {
-                String str = JsonUtils.toJsonString(o);
-                Dict dict = JsonUtils.parseMap(str);
-                if (MapUtil.isNotEmpty(dict)) {
-                    MapUtil.removeAny(dict, EXCLUDE_PROPERTIES);
-                    MapUtil.removeAny(dict, excludeParamNames);
-                    str = JsonUtils.toJsonString(dict);
+                String str = "";
+                if (o instanceof List<?> list) {
+                    List<Dict> list1 = new ArrayList<>();
+                    for (Object obj : list) {
+                        String str1 = JsonUtils.toJsonString(obj);
+                        Dict dict = JsonUtils.parseMap(str1);
+                        if (MapUtil.isNotEmpty(dict)) {
+                            MapUtil.removeAny(dict, exclude);
+                            list1.add(dict);
+                        }
+                    }
+                    str = JsonUtils.toJsonString(list1);
+                } else {
+                    str = JsonUtils.toJsonString(o);
+                    Dict dict = JsonUtils.parseMap(str);
+                    if (MapUtil.isNotEmpty(dict)) {
+                        MapUtil.removeAny(dict, exclude);
+                        str = JsonUtils.toJsonString(dict);
+                    }
                 }
                 params.add(str);
             }

@@ -2,14 +2,16 @@ package org.dromara.job.snailjob;
 
 import com.aizuda.snailjob.client.job.core.annotation.JobExecutor;
 import com.aizuda.snailjob.client.job.core.dto.JobArgs;
-import com.aizuda.snailjob.client.model.ExecuteResult;
 import com.aizuda.snailjob.common.core.util.JsonUtil;
 import com.aizuda.snailjob.common.log.SnailJobLog;
+import com.aizuda.snailjob.model.dto.ExecuteResult;
 import org.springframework.stereotype.Component;
 
 /**
- * @author opensnail
- * @date 2024-05-17
+ * 正常任务
+ * <a href="https://juejin.cn/post/7418074037392293914"></a>
+ *
+ * @author 老马
  */
 @Component
 @JobExecutor(name = "testJobExecutor")
