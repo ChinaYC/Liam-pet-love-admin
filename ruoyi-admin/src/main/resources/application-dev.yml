@@ -103,6 +103,7 @@ spring.data:
     database: 0
     # redis 密码必须配置
     password: Lyc123456
+    # password: 
     # 连接超时时间
     timeout: 10s
     # 是否开启ssl
@@ -118,6 +119,8 @@ redisson:
   nettyThreads: 8
   # 单节点配置
   singleServerConfig:
+    address: redis://127.0.0.1:6379
+    password: Lyc123456
     # 客户端名称 不能用中文
     clientName: RuoYi-Vue-Plus
     # 最小空闲连接数
