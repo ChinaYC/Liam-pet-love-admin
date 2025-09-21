@@ -5,6 +5,8 @@
 ## 平台简介
 宠物管理系统
 # 启动命令：
+mvn spring-boot:run
+<!-- mvn spring-boot:run -pl ruoyi-admin -->
 
 # 清理编译
 mvn clean compile
