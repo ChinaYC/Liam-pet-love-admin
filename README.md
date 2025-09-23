@@ -3,6 +3,22 @@
 
 - - -
 ## 平台简介
+宠物管理系统
+# 启动命令：
+mvn spring-boot:run
+<!-- mvn spring-boot:run -pl ruoyi-admin -->
+
+# 清理编译
+mvn clean compile
+
+# 跳过测试打包
+mvn clean package -Dmaven.test.skip=true
+
+# 运行测试
+mvn test
+
+# 查看依赖树
+mvn dependency:tree
 
 [![码云Gitee](https://gitee.com/dromara/RuoYi-Vue-Plus/badge/star.svg?theme=blue)](https://gitee.com/dromara/RuoYi-Vue-Plus)
 [![GitHub](https://img.shields.io/github/stars/dromara/RuoYi-Vue-Plus.svg?style=social&label=Stars)](https://github.com/dromara/RuoYi-Vue-Plus)
