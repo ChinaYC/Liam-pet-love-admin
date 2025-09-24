@@ -4,13 +4,145 @@
 - - -
 ## 平台简介
 宠物管理系统
-# 启动命令：
-mvn spring-boot:run
-<!-- mvn spring-boot:run -pl ruoyi-admin -->
+# 🚀 项目启动命令
 
-# 清理编译
+## ⚠️ 首次启动必须先编译
+```bash
+# 第一步：清理并安装到本地仓库（解决依赖问题，必须）
+mvn clean install -T 1C -Dmaven.test.skip=true
+
+# 或者仅编译（可能出现依赖错误）
+mvn clean compile -T 1C
+```
+
+## 💡 启动顺序说明
+- 建议启动顺序：**SnailJob → 监控服务器 → 主应用程序**
+- 各服务之间有依赖关系，按顺序启动可避免连接错误
+- 每个服务启动需要10-30秒，请耐心等待
+
+## 完整启动流程（推荐按顺序启动）
+
+### 1. 启动 SnailJob 任务调度服务器（端口17888）
+```bash
+# 方式一：项目根目录启动（推荐）
+mvn spring-boot:run -pl ruoyi-extend/ruoyi-snailjob-server
+
+# 方式二：切换目录启动
+cd ruoyi-extend/ruoyi-snailjob-server && mvn spring-boot:run
+```
+
+### 2. 启动监控服务器（端口9090）
+```bash
+# 方式一：项目根目录启动（推荐）
+mvn spring-boot:run -pl ruoyi-extend/ruoyi-monitor-admin
+
+# 方式二：切换目录启动
+cd ruoyi-extend/ruoyi-monitor-admin && mvn spring-boot:run
+```
+
+### 3. 启动主应用程序（端口8081）
+```bash
+# 方式一：项目根目录启动（推荐）
+mvn spring-boot:run -pl ruoyi-admin -Dspring-boot.run.arguments="--server.port=8081"
+
+# 方式二：切换目录启动
+cd ruoyi-admin && mvn spring-boot:run -Dspring-boot.run.arguments="--server.port=8081"
+```
+
+## 🚀 一键启动脚本
+
+### Mac/Linux 后台启动
+```bash
+# 启动所有服务（后台运行）
+nohup mvn spring-boot:run -pl ruoyi-extend/ruoyi-snailjob-server > snail-job.log 2>&1 &
+sleep 10
+nohup mvn spring-boot:run -pl ruoyi-extend/ruoyi-monitor-admin > monitor.log 2>&1 &
+sleep 10  
+nohup mvn spring-boot:run -pl ruoyi-admin -Dspring-boot.run.arguments="--server.port=8081" > main-app.log 2>&1 &
+
+# 查看启动状态
+ps aux | grep "spring-boot:run" | grep -v grep
+```
+
+### Windows 后台启动
+```cmd
+# 启动所有服务（后台运行）
+start /b mvn spring-boot:run -pl ruoyi-extend/ruoyi-snailjob-server > snail-job.log 2>&1
+timeout /t 10
+start /b mvn spring-boot:run -pl ruoyi-extend/ruoyi-monitor-admin > monitor.log 2>&1
+timeout /t 10
+start /b mvn spring-boot:run -pl ruoyi-admin -Dspring-boot.run.arguments="--server.port=8081" > main-app.log 2>&1
+
+# 查看启动状态
+tasklist | findstr java
+```
+
+# 🔧 清理编译命令
+```bash
+# 清理编译整个项目
 mvn clean compile
 
+# 多线程编译（加速）
+mvn clean compile -T 1C
+```
+
+# 🔍 端口占用查询命令
+
+## 查询8080端口占用（Mac/Linux）
+```bash
+# 查看端口占用
+lsof -i:8080
+
+# 查看多个端口占用
+netstat -an | grep -E "(8080|8081|9090|17888)"
+
+# 查看所有Java进程
+ps aux | grep java | grep -v grep
+```
+
+## 查询8080端口占用（Windows）
+```cmd
+# 查看端口占用
+netstat -ano | findstr :8080
+
+# 查看Java进程
+tasklist | findstr java
+```
+
+# ⚡ 进程管理命令
+
+## Mac系统 - 杀死Java进程
+```bash
+# 杀死所有Java进程（谨慎使用）
+sudo ps -ef | grep java | grep -v grep | awk '{print $2}' | xargs kill -9
+
+# 杀死特定端口进程
+lsof -ti:8080 | xargs kill -9
+
+# 杀死Spring Boot进程
+pkill -f "spring-boot:run"
+
+# 杀死特定应用进程
+pkill -f "ruoyi-admin"
+pkill -f "monitor-admin"
+pkill -f "snailjob-server"
+```
+
+## Windows系统 - 杀死Java进程
+```cmd
+# 杀死所有Java进程（谨慎使用）
+Taskkill /f /im java.exe /fi "imagename eq java.exe"
+
+# 杀死特定端口进程（先查询PID）
+netstat -ano | findstr :8080
+taskkill /f /pid [PID]
+
+# 杀死特定进程名
+taskkill /f /im javaw.exe
+```
+
+# 📦 项目打包命令
+```bash
 # 跳过测试打包
 mvn clean package -Dmaven.test.skip=true
 
@@ -19,6 +151,66 @@ mvn test
 
 # 查看依赖树
 mvn dependency:tree
+```
+
+# 🌐 服务访问地址
+
+启动成功后，可通过以下地址访问各服务：
+
+| 服务名称 | 访问地址 | 端口 | 账号密码 |
+|---------|---------|------|---------|
+| 🎯 主应用程序 | http://localhost:8081 | 8081 | 见前端配置 |
+| 📊 监控中心 | http://localhost:9090/admin | 9090 | ruoyi / 123456 |
+| ⚙️ SnailJob管理 | http://localhost:17888 | 17888 | 无需认证 |
+
+# ⚠️ 常见问题解决
+
+## 1. 端口被占用错误
+```bash
+# 查看占用进程
+lsof -i:8080
+
+# 杀死占用进程
+lsof -ti:8080 | xargs kill -9
+```
+
+## 2. 数据库连接失败
+```bash
+# 检查MySQL服务状态
+brew services list | grep mysql
+# 或
+sudo systemctl status mysql
+
+# 启动MySQL
+brew services start mysql
+# 或
+sudo systemctl start mysql
+```
+
+## 3. 编译失败/依赖解析错误
+```bash
+# 方法1：清理并重新编译
+mvn clean compile -T 1C
+
+# 方法2：强制更新依赖
+mvn clean compile -U
+
+# 方法3：安装到本地仓库（解决依赖问题）
+mvn clean install -T 1C -Dmaven.test.skip=true
+
+# 方法4：清理本地Maven缓存
+rm -rf ~/.m2/repository/org/dromara/
+mvn clean install -T 1C -Dmaven.test.skip=true
+```
+
+## 4. 内存不足
+```bash
+# 设置Maven内存
+export MAVEN_OPTS="-Xmx2048m -Xms1024m"
+
+# 或在启动命令中设置
+mvn spring-boot:run -Dspring-boot.run.jvmArguments="-Xmx1024m"
+```
 
 [![码云Gitee](https://gitee.com/dromara/RuoYi-Vue-Plus/badge/star.svg?theme=blue)](https://gitee.com/dromara/RuoYi-Vue-Plus)
 [![GitHub](https://img.shields.io/github/stars/dromara/RuoYi-Vue-Plus.svg?style=social&label=Stars)](https://github.com/dromara/RuoYi-Vue-Plus)
