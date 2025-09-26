@@ -163,6 +163,192 @@ mvn dependency:tree
 | 📊 监控中心 | http://localhost:9090/admin | 9090 | ruoyi / 123456 |
 | ⚙️ SnailJob管理 | http://localhost:17888 | 17888 | 无需认证 |
 
+# 📋 Git 多远程仓库管理
+
+## 🔧 配置多远程仓库
+
+### 1. 查看当前远程仓库配置
+```bash
+# 查看所有远程仓库
+git remote -v
+
+# 查看详细配置
+git remote show origin
+```
+
+### 2. 添加多个远程仓库
+```bash
+# 添加 Gitee 远程仓库
+git remote add Liam-gitee https://gitee.com/username/repository.git
+
+# 添加 GitHub 远程仓库
+git remote add ChinaYC https://github.com/username/repository.git
+
+# 验证添加结果
+git remote -v
+```
+
+### 3. 创建多推送远程仓库（推荐）
+```bash
+# 创建一个名为 'all' 的远程仓库，包含多个推送URL
+git remote add all https://gitee.com/username/repository.git
+git remote set-url --add --push all https://gitee.com/username/repository.git
+git remote set-url --add --push all https://github.com/username/repository.git
+
+# 验证配置
+git remote -v
+```
+
+## 🚀 多仓库推送操作
+
+### 1. 同时推送到多个仓库
+```bash
+# 推送当前分支到所有配置的远程仓库
+git push all
+
+# 推送指定分支到所有远程仓库
+git push all 5.X
+git push all dev
+git push all main
+
+# 推送所有分支到所有远程仓库
+git push all --all
+
+# 推送标签到所有远程仓库
+git push all --tags
+```
+
+### 2. 单独推送到特定仓库
+```bash
+# 推送到 Gitee
+git push Liam-gitee 5.X
+git push Liam-gitee main
+
+# 推送到 GitHub
+git push ChinaYC 5.X
+git push ChinaYC main
+
+# 推送到原始仓库
+git push origin 5.X
+```
+
+### 3. 强制推送（谨慎使用）
+```bash
+# 强制推送到所有远程仓库
+git push all --force
+
+# 强制推送到特定仓库
+git push Liam-gitee --force
+git push ChinaYC --force
+```
+
+## 🔍 远程仓库管理
+
+### 1. 查看远程仓库信息
+```bash
+# 查看所有远程仓库
+git remote -v
+
+# 查看特定远程仓库详情
+git remote show all
+git remote show Liam-gitee
+git remote show ChinaYC
+```
+
+### 2. 修改远程仓库URL
+```bash
+# 修改远程仓库URL
+git remote set-url Liam-gitee https://gitee.com/new-username/new-repository.git
+git remote set-url ChinaYC https://github.com/new-username/new-repository.git
+
+# 为多推送仓库添加新的推送URL
+git remote set-url --add --push all https://gitlab.com/username/repository.git
+```
+
+### 3. 删除远程仓库
+```bash
+# 删除特定远程仓库
+git remote remove Liam-gitee
+git remote remove ChinaYC
+
+# 删除多推送仓库
+git remote remove all
+```
+
+## 📝 常用Git工作流
+
+### 1. 日常开发推送流程
+```bash
+# 1. 提交代码
+git add .
+git commit -m "feat: 添加新功能"
+
+# 2. 推送到所有远程仓库
+git push all
+
+# 或者分别推送
+git push Liam-gitee
+git push ChinaYC
+```
+
+### 2. 分支管理
+```bash
+# 创建并切换到新分支
+git checkout -b feature/new-feature
+
+# 推送新分支到所有远程仓库
+git push all feature/new-feature
+
+# 设置上游分支
+git push --set-upstream all feature/new-feature
+```
+
+### 3. 拉取更新
+```bash
+# 从主要远程仓库拉取更新
+git pull origin 5.X
+
+# 从特定远程仓库拉取
+git pull Liam-gitee 5.X
+git pull ChinaYC 5.X
+```
+
+## ⚠️ 注意事项
+
+1. **推送前检查**：确保代码已经测试通过
+2. **分支同步**：定期从主仓库拉取最新代码
+3. **权限管理**：确保对所有远程仓库都有推送权限
+4. **网络问题**：如果某个仓库推送失败，可以单独重试
+5. **冲突处理**：如果出现冲突，先解决冲突再推送
+
+## 🛠️ 故障排除
+
+### 1. 推送失败处理
+```bash
+# 检查远程仓库连接
+git remote -v
+
+# 测试连接
+ssh -T git@github.com
+ssh -T git@gitee.com
+
+# 重新设置远程仓库
+git remote set-url origin https://github.com/username/repository.git
+```
+
+### 2. 权限问题
+```bash
+# 检查SSH密钥
+ls -la ~/.ssh/
+
+# 生成新的SSH密钥（如果需要）
+ssh-keygen -t rsa -b 4096 -C "your_email@example.com"
+
+# 添加SSH密钥到ssh-agent
+eval "$(ssh-agent -s)"
+ssh-add ~/.ssh/id_rsa
+```
+
 # ⚠️ 常见问题解决
 
 ## 1. 端口被占用错误
