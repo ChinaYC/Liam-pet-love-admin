@@ -29,6 +29,8 @@ public class GenUtils {
         genTable.setBusinessName(getBusinessName(genTable.getTableName()));
         genTable.setFunctionName(replaceText(genTable.getTableComment()));
         genTable.setFunctionAuthor(GenConfig.getAuthor());
+        genTable.setGenType(GenConstants.GEN_CUSTOM_PATH);
+        genTable.setGenPath(GenConfig.getGenPath());
         genTable.setCreateTime(null);
         genTable.setUpdateTime(null);
     }

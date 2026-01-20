@@ -35,6 +35,11 @@ public class GenConfig {
      */
     public static String tablePrefix;
 
+    /**
+     * 自定义路径
+     */
+    public static String genPath;
+
     public static String getAuthor() {
         return author;
     }
@@ -69,5 +74,14 @@ public class GenConfig {
     @Value("${tablePrefix}")
     public void setTablePrefix(String tablePrefix) {
         GenConfig.tablePrefix = tablePrefix;
+    }
+
+    public static String getGenPath() {
+        return genPath;
+    }
+
+    @Value("${genPath}")
+    public void setGenPath(String genPath) {
+        GenConfig.genPath = genPath;
     }
 }

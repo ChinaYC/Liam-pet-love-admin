@@ -376,17 +376,15 @@ public class GenTableServiceImpl implements IGenTableService {
         // 获取模板列表
         List<String> templates = VelocityUtils.getTemplateList(table.getTplCategory());
         for (String template : templates) {
-            if (!StringUtils.containsAny(template, "sql.vm", "api.ts.vm", "types.ts.vm", "index.vue.vm", "index-tree.vue.vm")) {
-                // 渲染模板
-                StringWriter sw = new StringWriter();
-                Template tpl = Velocity.getTemplate(template, Constants.UTF8);
-                tpl.merge(context, sw);
-                try {
-                    String path = getGenPath(table, template);
-                    FileUtils.writeUtf8String(sw.toString(), path);
-                } catch (Exception e) {
-                    throw new ServiceException("渲染模板失败，表名：" + table.getTableName());
-                }
+            // 渲染模板
+            StringWriter sw = new StringWriter();
+            Template tpl = Velocity.getTemplate(template, Constants.UTF8);
+            tpl.merge(context, sw);
+            try {
+                String path = getGenPath(table, template);
+                FileUtils.writeUtf8String(sw.toString(), path);
+            } catch (Exception e) {
+                throw new ServiceException("渲染模板失败，表名：" + table.getTableName());
             }
         }
     }

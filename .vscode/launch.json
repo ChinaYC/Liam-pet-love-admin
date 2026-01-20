@@ -1,0 +1,17 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "java",
+            "name": "RuoYi Admin (Debug)",
+            "request": "launch",
+            "mainClass": "org.dromara.DromaraApplication",
+            "projectName": "ruoyi-admin",
+            "args": "",
+            "env": {
+                "Spring.profiles.active": "dev"
+            },
+            "vmArgs": "-Dfile.encoding=UTF-8"
+        }
+    ]
+}

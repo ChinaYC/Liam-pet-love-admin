@@ -183,4 +183,14 @@ public interface GenConstants {
      * 需要
      */
     String REQUIRE = "1";
+
+    /**
+     * 生成代码方式（0zip压缩包 1自定义路径）
+     */
+    String GEN_ZIP = "0";
+
+    /**
+     * 生成代码方式（0zip压缩包 1自定义路径）
+     */
+    String GEN_CUSTOM_PATH = "1";
 }

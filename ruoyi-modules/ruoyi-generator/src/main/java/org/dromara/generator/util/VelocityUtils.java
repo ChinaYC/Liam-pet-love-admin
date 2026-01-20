@@ -28,12 +28,12 @@ public class VelocityUtils {
     /**
      * 项目空间路径
      */
-    private static final String PROJECT_PATH = "main/java";
+    private static final String PROJECT_PATH = "Liam-pet-love-admin/ruoyi-admin/src/main/java";
 
     /**
      * mybatis空间路径
      */
-    private static final String MYBATIS_PATH = "main/resources/mapper";
+    private static final String MYBATIS_PATH = "Liam-pet-love-admin/ruoyi-admin/src/main/resources/mapper";
 
     /**
      * 默认上级菜单，系统工具
@@ -156,7 +156,7 @@ public class VelocityUtils {
 
         String javaPath = PROJECT_PATH + "/" + StringUtils.replace(packageName, ".", "/");
         String mybatisPath = MYBATIS_PATH + "/" + moduleName;
-        String vuePath = "vue";
+        String vuePath = "Liam-pet-love-ui/src";
 
         if (template.contains("domain.java.vm")) {
             fileName = StringUtils.format("{}/domain/{}.java", javaPath, className);

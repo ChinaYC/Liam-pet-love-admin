@@ -6,6 +6,8 @@
 宠物管理系统
 # 🚀 项目启动命令
 
+## 启动指南 (Startup Guide)
+
 ## ⚠️ 首次启动必须先编译
 ```bash
 # 第一步：清理并安装到本地仓库（解决依赖问题，必须）
@@ -81,6 +83,12 @@ tasklist | findstr java
 ```bash
 # 清理编译整个项目
 mvn clean compile
+```
+
+### 1. 环境准备 (Environment Setup)
+*   **JDK 17+**: 确保本地已安装 JDK 17 或 21。
+*   **MySQL 8.0+**: 确保 MySQL 已启动，并创建数据库 `Liam_pet_love_bd`。
+*   **Redis**: 确保 Redis 服务已启动。
 
 # 多线程编译（加速）
 mvn clean compile -T 1C
@@ -145,13 +153,44 @@ taskkill /f /im javaw.exe
 ```bash
 # 跳过测试打包
 mvn clean package -Dmaven.test.skip=true
+```
 
-# 运行测试
-mvn test
+### 2. 数据库初始化 (Database Initialization)
+按顺序导入以下 SQL 脚本 (位于 `script/sql` 目录):
+1.  `ry_vue_5.X.sql` (核心表结构与基础数据)
+2.  `ry_job.sql` (任务调度相关)
+3.  `ry_workflow.sql` (工作流相关)
 
+### 3. 项目构建 (Build)
+在根目录下执行 Maven 编译安装：
+```bash
 # 查看依赖树
 mvn dependency:tree
 ```
+
+cd Liam-pet-love-admin
+# 建议先清理并安装依赖到本地仓库
+mvn install -Dmaven.test.skip=true
+或
+mvn clean install -Dmaven.test.skip=true
+```
+*注意：如果遇到 `Operation not permitted` (如 `.msp/incrementMark`) 错误，请尝试禁用增量编译：*
+```bash
+mvn clean install -Dmaven.test.skip=true -Dmaven.compiler.useIncrementalCompilation=false
+```
+
+### 4. 服务启动 (Run)
+#### 核心服务 (Admin)
+```bash
+cd Liam-pet-love-admin
+mvn spring-boot:run -pl ruoyi-admin
+```
+
+#### 扩展服务 (可选)
+*   **监控中心**: `mvn spring-boot:run -pl ruoyi-extend/ruoyi-monitor-admin`
+*   **任务调度**: `mvn spring-boot:run -pl ruoyi-extend/ruoyi-snailjob-server`
+
+---
 
 # 🌐 服务访问地址
 
@@ -397,7 +436,6 @@ export MAVEN_OPTS="-Xmx2048m -Xms1024m"
 # 或在启动命令中设置
 mvn spring-boot:run -Dspring-boot.run.jvmArguments="-Xmx1024m"
 ```
-
 [![码云Gitee](https://gitee.com/dromara/RuoYi-Vue-Plus/badge/star.svg?theme=blue)](https://gitee.com/dromara/RuoYi-Vue-Plus)
 [![GitHub](https://img.shields.io/github/stars/dromara/RuoYi-Vue-Plus.svg?style=social&label=Stars)](https://github.com/dromara/RuoYi-Vue-Plus)
 [![Star](https://gitcode.com/dromara/RuoYi-Vue-Plus/star/badge.svg)](https://gitcode.com/dromara/RuoYi-Vue-Plus)
