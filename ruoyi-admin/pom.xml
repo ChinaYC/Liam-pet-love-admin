@@ -97,11 +97,9 @@
             <artifactId>ruoyi-system</artifactId>
         </dependency>
 
-        <!-- Pet Love 模块 -->
         <dependency>
             <groupId>org.dromara</groupId>
-            <artifactId>ruoyi-pet-love</artifactId>
-            <version>${revision}</version>
+            <artifactId>liam-pet-love</artifactId>
         </dependency>
 
         <dependency>

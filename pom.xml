@@ -340,6 +340,13 @@
 
             <dependency>
                 <groupId>org.dromara</groupId>
+                <artifactId>liam-pet-love</artifactId>
+                <version>${revision}</version>
+            </dependency>
+
+            <!-- 代码生成-->
+            <dependency>
+                <groupId>org.dromara</groupId>
                 <artifactId>ruoyi-generator</artifactId>
                 <version>${revision}</version>
             </dependency>
@@ -365,6 +372,7 @@
         <module>ruoyi-common</module>
         <module>ruoyi-extend</module>
         <module>ruoyi-modules</module>
+        <module>liam-pet-love</module>
     </modules>
     <packaging>pom</packaging>
 
@@ -388,6 +396,11 @@
                             <groupId>org.projectlombok</groupId>
                             <artifactId>lombok</artifactId>
                             <version>${lombok.version}</version>
+                        </path>
+                        <path>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok-mapstruct-binding</artifactId>
+                            <version>${mapstruct-plus.lombok.version}</version>
                         </path>
                         <path>
                             <groupId>org.springframework.boot</groupId>

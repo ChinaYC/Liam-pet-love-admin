@@ -26,6 +26,9 @@ public class GenUtils {
         genTable.setClassName(convertClassName(genTable.getTableName()));
         genTable.setPackageName(GenConfig.getPackageName());
         genTable.setModuleName(getModuleName(GenConfig.getPackageName()));
+        if (StringUtils.startsWithIgnoreCase(genTable.getTableName(), "L_")) {
+            genTable.setModuleName("pet");
+        }
         genTable.setBusinessName(getBusinessName(genTable.getTableName()));
         genTable.setFunctionName(replaceText(genTable.getTableComment()));
         genTable.setFunctionAuthor(GenConfig.getAuthor());
